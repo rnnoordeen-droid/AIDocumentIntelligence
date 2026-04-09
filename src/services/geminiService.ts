@@ -20,12 +20,17 @@ export async function parseDocument(base64Data: string, mimeType: string): Promi
 1. Classify the document type (e.g., Invoice, Bill of Lading, Contract, ID, etc.).
 2. Extract ALL meaningful data fields found in the document.
 3. Provide a brief summary of the document's purpose.
-4. Assign a confidence score (0-1) for the extraction.
+4. Assign a confidence score (0-1) for the extraction overall.
+5. Assign a confidence score (0-1) for EACH extracted field.
 
 Return the data in the following JSON structure:
 {
   "documentType": "string",
   "confidenceScore": number,
+  "fieldConfidence": {
+    "field_name": number,
+    ...
+  },
   "summary": "string",
   "fields": {
     "field_name": "value",
@@ -48,6 +53,7 @@ Ensure field names are descriptive (use snake_case or camelCase). If a field con
     return {
       documentType: result.documentType || "Unknown",
       confidenceScore: result.confidenceScore || 0,
+      fieldConfidence: result.fieldConfidence || {},
       summary: result.summary || "",
       fields: result.fields || {}
     };

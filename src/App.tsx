@@ -325,6 +325,35 @@ export default function App() {
     }
   };
 
+  const handleReject = async (docObj: SCFDocument) => {
+    if (!user) return;
+
+    try {
+      const docRef = doc(db, 'documents', docObj.id);
+      await updateDoc(docRef, {
+        status: 'rejected',
+      });
+
+      const auditLog: AuditLog = {
+        id: `log-${Date.now()}`,
+        documentId: docObj.id,
+        userId: user.uid,
+        userName: user.displayName || user.email || 'User',
+        action: 'REJECT',
+        timestamp: new Date().toISOString(),
+        details: 'Document rejected during human validation'
+      };
+
+      await addDoc(collection(db, 'auditLogs'), auditLog);
+
+      setIsValidatingView(false);
+      setSelectedDoc(null);
+      toast.error("Document rejected and marked as invalid");
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `documents/${docObj.id}`);
+    }
+  };
+
   if (!isAuthReady || (isLoading && user)) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-brand-surface gap-4">
@@ -717,14 +746,26 @@ export default function App() {
                     </div>
                   </div>
                   <div className="flex gap-3">
-                    <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">Reject</Button>
-                    <Button 
-                      className="bg-brand-accent hover:bg-brand-accent/90 text-white gap-2"
-                      onClick={() => handleValidate(selectedDoc)}
-                    >
-                      <Save size={18} />
-                      Approve & Integrate
-                    </Button>
+                    {selectedDoc.status === 'pending' ? (
+                      <>
+                        <Button 
+                          variant="outline" 
+                          className="text-red-600 border-red-200 hover:bg-red-50"
+                          onClick={() => handleReject(selectedDoc)}
+                        >
+                          Reject
+                        </Button>
+                        <Button 
+                          className="bg-brand-accent hover:bg-brand-accent/90 text-white gap-2"
+                          onClick={() => handleValidate(selectedDoc)}
+                        >
+                          <Save size={18} />
+                          Approve & Integrate
+                        </Button>
+                      </>
+                    ) : (
+                      <Button variant="outline" onClick={() => setIsValidatingView(false)}>Close Review</Button>
+                    )}
                   </div>
                 </div>
 
@@ -787,24 +828,45 @@ export default function App() {
 
                       <div className="space-y-4">
                         <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400">General Fields</h4>
-                        <div className="grid gap-5">
+                        <div className="grid gap-4">
                           {selectedDoc.extractedData?.fields && Object.entries(selectedDoc.extractedData.fields).map(([key, value]) => {
                             if (Array.isArray(value)) return null;
+                            const confidence = selectedDoc.extractedData?.fieldConfidence?.[key] || 1;
+                            const isLowConfidence = confidence < 0.8;
+                            
                             return (
-                              <div key={key} className="space-y-2">
-                                <Label htmlFor={key} className="text-xs font-semibold capitalize text-gray-600">
-                                  {key.replace(/_/g, ' ')}
-                                </Label>
-                                <Input 
-                                  id={key} 
-                                  defaultValue={String(value)} 
-                                  className="h-10 focus-visible:ring-brand-accent"
-                                  onChange={(e) => {
-                                    if (selectedDoc.extractedData) {
-                                      selectedDoc.extractedData.fields[key] = e.target.value;
-                                    }
-                                  }}
-                                />
+                              <div key={key} className="space-y-1">
+                                <div className="grid grid-cols-3 items-center gap-4">
+                                  <Label htmlFor={key} className="text-xs font-semibold capitalize text-gray-500 text-right truncate">
+                                    {key.replace(/_/g, ' ')}
+                                  </Label>
+                                  <div className="col-span-2 relative">
+                                    <Input 
+                                      id={key} 
+                                      defaultValue={String(value)} 
+                                      readOnly={selectedDoc.status !== 'pending'}
+                                      className={`h-9 text-sm focus-visible:ring-brand-accent ${
+                                        isLowConfidence && selectedDoc.status === 'pending' ? 'border-red-300 bg-red-50/30' : ''
+                                      }`}
+                                      onChange={(e) => {
+                                        if (selectedDoc.extractedData) {
+                                          selectedDoc.extractedData.fields[key] = e.target.value;
+                                        }
+                                      }}
+                                    />
+                                    {confidence < 1 && (
+                                      <div className={`absolute -right-12 top-1/2 -translate-y-1/2 text-[10px] font-bold ${isLowConfidence ? 'text-red-500' : 'text-gray-400'}`}>
+                                        {Math.round(confidence * 100)}%
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                {isLowConfidence && selectedDoc.status === 'pending' && (
+                                  <div className="grid grid-cols-3 gap-4">
+                                    <div />
+                                    <p className="col-span-2 text-[10px] text-red-500 font-medium">Low confidence - please verify</p>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
@@ -820,10 +882,10 @@ export default function App() {
                             </h4>
                             <div className="space-y-3">
                               {value.map((item, idx) => (
-                                <div key={idx} className="p-4 bg-gray-50 rounded-xl border border-gray-100 text-sm space-y-3 shadow-sm">
+                                <div key={idx} className="p-3 bg-gray-50 rounded-lg border border-gray-100 text-[11px] space-y-1 shadow-sm">
                                   {Object.entries(item).map(([iKey, iVal]) => (
-                                    <div key={iKey} className="flex justify-between items-center">
-                                      <span className="text-xs text-gray-500 capitalize">{iKey.replace(/_/g, ' ')}:</span>
+                                    <div key={iKey} className="grid grid-cols-2 gap-2">
+                                      <span className="text-gray-400 capitalize text-right">{iKey.replace(/_/g, ' ')}:</span>
                                       <span className="font-semibold text-gray-700">{String(iVal)}</span>
                                     </div>
                                   ))}

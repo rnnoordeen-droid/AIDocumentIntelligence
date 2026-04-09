@@ -3,6 +3,7 @@ export type DocumentStatus = 'pending' | 'processing' | 'validated' | 'rejected'
 export interface ExtractedData {
   documentType?: string;
   confidenceScore?: number;
+  fieldConfidence?: Record<string, number>;
   fields: Record<string, any>;
   summary?: string;
 }
