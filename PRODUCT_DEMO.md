@@ -52,7 +52,3 @@ DocManager solves a real-world business problem: **Data Accuracy at Scale**. It 
 2.  **Real-time Cloud Databases** (Firestore).
 3.  **Enterprise UI/UX** (HITL patterns, accessibility, responsive design).
 4.  **Security & Compliance** (Audit logs, RBAC).
-
----
-**Contact Information:**
-[Your Name] | [Your Email] | [Your LinkedIn]
