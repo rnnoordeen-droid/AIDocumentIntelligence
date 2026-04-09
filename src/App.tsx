@@ -23,7 +23,10 @@ import {
   FileUp,
   ExternalLink,
   LogIn,
-  LogOut
+  LogOut,
+  Download,
+  Database,
+  ChevronLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
@@ -75,7 +78,7 @@ export default function App() {
   const [usersList, setUsersList] = useState<UserProfile[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
-  const [isValidating, setIsValidating] = useState(false);
+  const [isValidatingView, setIsValidatingView] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<SCFDocument | null>(null);
   const [isParsing, setIsParsing] = useState(false);
   const [user, setUser] = useState<FirebaseUser | null>(null);
@@ -160,6 +163,65 @@ export default function App() {
     };
   }, [isAuthReady, user]);
 
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  // Handle Preview URL generation from base64
+  useEffect(() => {
+    if (selectedDoc?.base64Content) {
+      try {
+        const base64Parts = selectedDoc.base64Content.split(',');
+        if (base64Parts.length < 2) return;
+        
+        const contentType = base64Parts[0].match(/:(.*?);/)?.[1] || '';
+        const base64Data = base64Parts[1];
+        
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: contentType });
+        const url = URL.createObjectURL(blob);
+        
+        setPreviewUrl(url);
+        
+        return () => {
+          URL.revokeObjectURL(url);
+        };
+      } catch (e) {
+        console.error("Failed to create preview URL", e);
+        setPreviewUrl(null);
+      }
+    } else {
+      setPreviewUrl(null);
+    }
+  }, [selectedDoc]);
+
+  const downloadCSV = () => {
+    if (documents.length === 0) return;
+    
+    const headers = ["FileName", "Type", "Status", "UploadDate", "UploadedBy", "Summary"];
+    const rows = documents.map(doc => [
+      doc.fileName,
+      doc.extractedData?.documentType || doc.fileType,
+      doc.status,
+      doc.uploadDate,
+      doc.uploadedBy,
+      `"${(doc.extractedData?.summary || "").replace(/"/g, '""')}"`
+    ]);
+    
+    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `docintel_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const filteredDocs = documents.filter(doc => 
     doc.fileName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     doc.extractedData?.documentType?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -172,6 +234,13 @@ export default function App() {
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !user) return;
+
+    // Firestore has a 1MB limit per document. Base64 adds ~33% overhead.
+    // We limit to ~750KB to be safe.
+    if (file.size > 750 * 1024) {
+      toast.error("File too large. For this demo, please use files under 750KB due to Firestore document limits.");
+      return;
+    }
 
     setIsParsing(true);
     setIsUploadOpen(false);
@@ -248,7 +317,7 @@ export default function App() {
 
       await addDoc(collection(db, 'auditLogs'), auditLog);
 
-      setIsValidating(false);
+      setIsValidatingView(false);
       setSelectedDoc(null);
       toast.success("Document validated and integrated with financial system");
     } catch (err) {
@@ -272,7 +341,7 @@ export default function App() {
           <CardHeader className="text-center space-y-4">
             <div className="w-16 h-16 bg-brand-accent rounded-2xl flex items-center justify-center font-bold text-3xl text-white mx-auto shadow-lg shadow-brand-accent/20">D</div>
             <div>
-              <CardTitle className="text-2xl font-bold text-brand-primary">DocIntel</CardTitle>
+              <CardTitle className="text-2xl font-bold text-brand-primary">DocManager</CardTitle>
               <CardDescription>Document Intelligence Application</CardDescription>
             </div>
           </CardHeader>
@@ -320,7 +389,7 @@ export default function App() {
         <div className="p-6 flex items-center gap-3 border-b border-white/10">
           <div className="w-10 h-10 bg-brand-accent rounded-lg flex items-center justify-center font-bold text-xl">D</div>
           <div>
-            <h1 className="font-bold text-sm leading-tight">DocIntel</h1>
+            <h1 className="font-bold text-sm leading-tight">DocManager</h1>
             <p className="text-[10px] text-white/50 uppercase tracking-widest">Document Intelligence</p>
           </div>
         </div>
@@ -401,15 +470,15 @@ export default function App() {
         </header>
 
         {/* Content Area */}
-        <ScrollArea className="flex-1 p-8">
+        <ScrollArea className={`flex-1 ${isValidatingView ? 'p-0' : 'p-8'}`}>
           <AnimatePresence mode="wait">
-            {activeTab === 'dashboard' && (
+            {activeTab === 'dashboard' && !isValidatingView && (
               <motion.div
                 key="dashboard"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="space-y-8"
+                className="space-y-8 p-8"
               >
                 <div className="flex justify-between items-end">
                   <div>
@@ -458,7 +527,7 @@ export default function App() {
                               <TableCell>{getStatusBadge(doc.status)}</TableCell>
                               <TableCell>{new Date(doc.uploadDate).toLocaleDateString()}</TableCell>
                               <TableCell className="text-right">
-                                <Button variant="ghost" size="sm" onClick={() => { setSelectedDoc(doc); setIsValidating(true); }}>View</Button>
+                                <Button variant="ghost" size="sm" onClick={() => { setSelectedDoc(doc); setIsValidatingView(true); }}>View</Button>
                               </TableCell>
                             </TableRow>
                           ))}
@@ -495,19 +564,23 @@ export default function App() {
               </motion.div>
             )}
 
-            {activeTab === 'documents' && (
+            {activeTab === 'documents' && !isValidatingView && (
               <motion.div
                 key="documents"
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className="space-y-6"
+                className="space-y-6 p-8"
               >
                 <div className="flex justify-between items-center">
                   <div>
                     <h2 className="text-2xl font-bold text-brand-primary">Document Repository</h2>
                     <p className="text-gray-500">Manage and validate all documents.</p>
                   </div>
+                  <Button variant="outline" className="gap-2" onClick={downloadCSV}>
+                    <Download size={18} />
+                    Export CSV
+                  </Button>
                 </div>
 
                 <Card>
@@ -518,6 +591,7 @@ export default function App() {
                           <TableHead>Document Name</TableHead>
                           <TableHead>Type</TableHead>
                           <TableHead>Summary</TableHead>
+                          <TableHead>Confidence</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Upload Date</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
@@ -535,13 +609,29 @@ export default function App() {
                             <TableCell className="max-w-xs truncate text-gray-500">
                               {doc.extractedData?.summary || '---'}
                             </TableCell>
+                            <TableCell>
+                              {doc.extractedData?.confidenceScore ? (
+                                <div className="flex items-center gap-2">
+                                  <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                    <div 
+                                      className={`h-full rounded-full ${
+                                        doc.extractedData.confidenceScore > 0.8 ? 'bg-green-500' : 
+                                        doc.extractedData.confidenceScore > 0.5 ? 'bg-amber-500' : 'bg-red-500'
+                                      }`}
+                                      style={{ width: `${doc.extractedData.confidenceScore * 100}%` }}
+                                    ></div>
+                                  </div>
+                                  <span className="text-[10px] font-medium">{Math.round(doc.extractedData.confidenceScore * 100)}%</span>
+                                </div>
+                              ) : '---'}
+                            </TableCell>
                             <TableCell>{getStatusBadge(doc.status)}</TableCell>
                             <TableCell>{new Date(doc.uploadDate).toLocaleDateString()}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-2">
-                                <Button variant="outline" size="sm" onClick={() => { setSelectedDoc(doc); setIsValidating(true); }}>View</Button>
+                                <Button variant="outline" size="sm" onClick={() => { setSelectedDoc(doc); setIsValidatingView(true); }}>View</Button>
                                 {doc.status === 'pending' && (
-                                  <Button className="bg-brand-accent hover:bg-brand-accent/90 text-white" size="sm" onClick={() => { setSelectedDoc(doc); setIsValidating(true); }}>Validate</Button>
+                                  <Button className="bg-brand-accent hover:bg-brand-accent/90 text-white" size="sm" onClick={() => { setSelectedDoc(doc); setIsValidatingView(true); }}>Validate</Button>
                                 )}
                               </div>
                             </TableCell>
@@ -554,13 +644,13 @@ export default function App() {
               </motion.div>
             )}
 
-            {activeTab === 'audit' && (
+            {activeTab === 'audit' && !isValidatingView && (
               <motion.div
                 key="audit"
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className="space-y-6"
+                className="space-y-6 p-8"
               >
                 <div>
                   <h2 className="text-2xl font-bold text-brand-primary">Audit Trails</h2>
@@ -601,16 +691,167 @@ export default function App() {
               </motion.div>
             )}
 
-            {activeTab === 'settings' && (
+            {isValidatingView && selectedDoc && (
+              <motion.div
+                key="validation-view"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="h-[calc(100vh-4rem)] flex flex-col p-8 space-y-6 overflow-hidden"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => setIsValidatingView(false)}
+                      className="rounded-full"
+                    >
+                      <ChevronLeft size={24} />
+                    </Button>
+                    <div>
+                      <h2 className="text-2xl font-bold text-brand-primary">Document Validation</h2>
+                      <p className="text-gray-500 flex items-center gap-2">
+                        {selectedDoc.fileName} • {getStatusBadge(selectedDoc.status)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">Reject</Button>
+                    <Button 
+                      className="bg-brand-accent hover:bg-brand-accent/90 text-white gap-2"
+                      onClick={() => handleValidate(selectedDoc)}
+                    >
+                      <Save size={18} />
+                      Approve & Integrate
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex-1 flex gap-8 min-h-0">
+                  {/* Document Preview Panel */}
+                  <div className="flex-1 bg-white rounded-xl border shadow-sm overflow-hidden flex flex-col">
+                    <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
+                      <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Document Preview</span>
+                      <Badge variant="outline" className="text-[10px]">
+                        {selectedDoc.fileType}
+                      </Badge>
+                    </div>
+                    <div className="flex-1 bg-gray-100 flex items-center justify-center relative overflow-auto">
+                      {previewUrl ? (
+                        selectedDoc.base64Content?.includes('application/pdf') ? (
+                          <iframe 
+                            src={previewUrl} 
+                            className="w-full h-full border-none"
+                            title="Document Preview"
+                          />
+                        ) : (
+                          <img 
+                            src={previewUrl} 
+                            alt="Document Preview" 
+                            className="max-w-full h-auto object-contain p-4"
+                            referrerPolicy="no-referrer"
+                          />
+                        )
+                      ) : (
+                        <div className="text-center p-12">
+                          <FileText size={64} className="mx-auto text-gray-300 mb-4" />
+                          <p className="text-lg font-medium text-gray-500">{selectedDoc.fileName}</p>
+                          <p className="text-sm text-gray-400 mt-2">
+                            {selectedDoc.base64Content ? "Generating preview..." : "No preview available for this document"}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Extracted Data Panel */}
+                  <div className="w-[450px] bg-white rounded-xl border shadow-sm flex flex-col overflow-hidden">
+                    <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
+                      <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Extracted Data</span>
+                      {selectedDoc.extractedData?.confidenceScore && (
+                        <Badge variant="outline" className="text-[10px]">
+                          {Math.round(selectedDoc.extractedData.confidenceScore * 100)}% Confidence
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                      {selectedDoc.extractedData?.summary && (
+                        <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                          <h5 className="text-[10px] font-bold uppercase text-blue-400 mb-1">AI Summary</h5>
+                          <p className="text-sm text-blue-800 leading-relaxed italic">
+                            "{selectedDoc.extractedData.summary}"
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="space-y-4">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400">General Fields</h4>
+                        <div className="grid gap-5">
+                          {selectedDoc.extractedData?.fields && Object.entries(selectedDoc.extractedData.fields).map(([key, value]) => {
+                            if (Array.isArray(value)) return null;
+                            return (
+                              <div key={key} className="space-y-2">
+                                <Label htmlFor={key} className="text-xs font-semibold capitalize text-gray-600">
+                                  {key.replace(/_/g, ' ')}
+                                </Label>
+                                <Input 
+                                  id={key} 
+                                  defaultValue={String(value)} 
+                                  className="h-10 focus-visible:ring-brand-accent"
+                                  onChange={(e) => {
+                                    if (selectedDoc.extractedData) {
+                                      selectedDoc.extractedData.fields[key] = e.target.value;
+                                    }
+                                  }}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {selectedDoc.extractedData?.fields && Object.entries(selectedDoc.extractedData.fields).map(([key, value]) => {
+                        if (!Array.isArray(value)) return null;
+                        return (
+                          <div key={key} className="space-y-4">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 capitalize">
+                              {key.replace(/_/g, ' ')}
+                            </h4>
+                            <div className="space-y-3">
+                              {value.map((item, idx) => (
+                                <div key={idx} className="p-4 bg-gray-50 rounded-xl border border-gray-100 text-sm space-y-3 shadow-sm">
+                                  {Object.entries(item).map(([iKey, iVal]) => (
+                                    <div key={iKey} className="flex justify-between items-center">
+                                      <span className="text-xs text-gray-500 capitalize">{iKey.replace(/_/g, ' ')}:</span>
+                                      <span className="font-semibold text-gray-700">{String(iVal)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ))}
+                              <Button variant="outline" size="sm" className="w-full border-dashed py-6 text-gray-400 hover:text-brand-accent hover:border-brand-accent">
+                                + Add Item to {key.replace(/_/g, ' ')}
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'settings' && !isValidatingView && (
               <motion.div
                 key="settings"
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className="space-y-8"
+                className="space-y-8 p-8"
               >
                 <div>
-                  <h2 className="text-2xl font-bold text-wf-dark">System Settings</h2>
+                  <h2 className="text-2xl font-bold text-brand-primary">System Settings</h2>
                   <p className="text-gray-500">Configure application preferences and manage user access control.</p>
                 </div>
 
@@ -652,7 +893,7 @@ export default function App() {
                             ))}
                           </TableBody>
                         </Table>
-                        <Button className="mt-4 bg-wf-red hover:bg-wf-red/90 text-white">Add New User</Button>
+                        <Button className="mt-4 bg-brand-accent hover:bg-brand-accent/90 text-white">Add New User</Button>
                       </CardContent>
                     </Card>
 
@@ -668,7 +909,7 @@ export default function App() {
                               <ExternalLink className="text-blue-600" size={20} />
                             </div>
                             <div>
-                              <p className="font-bold text-sm">Wells Fargo Core Banking API</p>
+                              <p className="font-bold text-sm">Core Banking API</p>
                               <p className="text-xs text-gray-500">Connected • Last sync: 5 mins ago</p>
                             </div>
                           </div>
@@ -710,7 +951,7 @@ export default function App() {
                         </div>
                         <div className="flex items-center justify-between">
                           <Label className="text-xs">2FA for Validators</Label>
-                          <Badge className="bg-wf-red/10 text-wf-red">Required</Badge>
+                          <Badge className="bg-brand-accent/10 text-brand-accent">Required</Badge>
                         </div>
                         <Button variant="outline" className="w-full mt-4">Download Security Report</Button>
                       </CardContent>
@@ -759,128 +1000,7 @@ export default function App() {
         </DialogContent>
       </Dialog>
 
-      {/* Validation Dialog (HITL) */}
-      <Dialog open={isValidating} onOpenChange={setIsValidating}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <div className="flex justify-between items-center pr-8">
-              <div>
-                <DialogTitle>Document Validation</DialogTitle>
-                <DialogDescription>
-                  Review and correct the data extracted by the AI agent.
-                </DialogDescription>
-              </div>
-              {selectedDoc && getStatusBadge(selectedDoc.status)}
-            </div>
-          </DialogHeader>
-          
-          <div className="flex-1 overflow-hidden flex gap-6 py-4">
-            {/* Document Preview */}
-            <div className="flex-1 bg-gray-100 rounded-lg flex items-center justify-center border overflow-hidden relative">
-              {selectedDoc?.base64Content ? (
-                selectedDoc.base64Content.includes('application/pdf') ? (
-                  <iframe 
-                    src={selectedDoc.base64Content} 
-                    className="w-full h-full border-none"
-                    title="Document Preview"
-                  />
-                ) : (
-                  <img 
-                    src={selectedDoc.base64Content} 
-                    alt="Document Preview" 
-                    className="max-w-full max-h-full object-contain"
-                    referrerPolicy="no-referrer"
-                  />
-                )
-              ) : (
-                <div className="text-center p-8">
-                  <FileText size={48} className="mx-auto text-gray-300 mb-4" />
-                  <p className="text-sm font-medium text-gray-500">{selectedDoc?.fileName}</p>
-                  <p className="text-xs text-gray-400 mt-2">No preview available for this document</p>
-                </div>
-              )}
-            </div>
-
-            {/* Extracted Data Form */}
-            <div className="w-96 overflow-y-auto pr-2 space-y-6">
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <h4 className="text-sm font-bold uppercase tracking-wider text-gray-400">Extracted Information</h4>
-                  {selectedDoc?.extractedData?.confidenceScore && (
-                    <Badge variant="outline" className="text-[10px]">
-                      {Math.round(selectedDoc.extractedData.confidenceScore * 100)}% Confidence
-                    </Badge>
-                  )}
-                </div>
-                
-                {selectedDoc?.extractedData?.summary && (
-                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
-                    <p className="text-xs text-blue-800 leading-relaxed italic">
-                      "{selectedDoc.extractedData.summary}"
-                    </p>
-                  </div>
-                )}
-
-                <div className="grid gap-4">
-                  {selectedDoc?.extractedData?.fields && Object.entries(selectedDoc.extractedData.fields).map(([key, value]) => {
-                    if (Array.isArray(value)) return null; // Handle arrays separately
-                    return (
-                      <div key={key} className="space-y-2">
-                        <Label htmlFor={key} className="capitalize">{key.replace(/_/g, ' ')}</Label>
-                        <Input 
-                          id={key} 
-                          defaultValue={String(value)} 
-                          onChange={(e) => {
-                            if (selectedDoc.extractedData) {
-                              selectedDoc.extractedData.fields[key] = e.target.value;
-                            }
-                          }}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {selectedDoc?.extractedData?.fields && Object.entries(selectedDoc.extractedData.fields).map(([key, value]) => {
-                if (!Array.isArray(value)) return null;
-                return (
-                  <div key={key} className="space-y-4">
-                    <h4 className="text-sm font-bold uppercase tracking-wider text-gray-400 capitalize">{key.replace(/_/g, ' ')}</h4>
-                    <div className="space-y-3">
-                      {value.map((item, idx) => (
-                        <div key={idx} className="p-3 bg-gray-50 rounded-lg border text-xs space-y-2">
-                          {Object.entries(item).map(([iKey, iVal]) => (
-                            <div key={iKey} className="flex justify-between">
-                              <span className="text-gray-500 capitalize">{iKey.replace(/_/g, ' ')}:</span>
-                              <span className="font-medium">{String(iVal)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                      <Button variant="outline" size="sm" className="w-full border-dashed">Add Item</Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <DialogFooter className="border-t pt-4">
-            <Button variant="ghost" onClick={() => setIsValidating(false)}>Cancel</Button>
-            <div className="flex gap-2">
-              <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">Reject</Button>
-              <Button 
-                className="bg-brand-accent hover:bg-brand-accent/90 text-white gap-2"
-                onClick={() => selectedDoc && handleValidate(selectedDoc)}
-              >
-                <Save size={18} />
-                Approve & Integrate
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Validation Dialog (HITL) - REMOVED IN FAVOR OF FULL SCREEN VIEW */}
     </div>
   );
 }

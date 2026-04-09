@@ -1,6 +1,6 @@
-# DocIntel: AI-Powered Document Intelligence
+# DocManager: AI-Powered Document Intelligence
 
-DocIntel is a production-ready Single Page Application (SPA) designed for automated document classification and data extraction. Built with React, Firebase, and Google's Gemini AI, it provides a seamless Human-in-the-Loop (HITL) workflow for managing corporate documents.
+DocManager is a production-ready Single Page Application (SPA) designed for automated document classification and data extraction. Built with React, Firebase, and Google's Gemini AI, it provides a seamless Human-in-the-Loop (HITL) workflow for managing corporate documents.
 
 ## 🚀 Features
 

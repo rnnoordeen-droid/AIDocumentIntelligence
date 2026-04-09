@@ -1,6 +1,6 @@
-# DocIntel API Documentation
+# DocManager API Documentation
 
-DocIntel provides a robust API for automated document classification and data extraction.
+DocManager provides a robust API for automated document classification and data extraction.
 
 ## Base URL
 `https://<your-app-url>.run.app/api`
@@ -59,6 +59,6 @@ Manually confirms the extracted data and marks the document as 'validated'.
 
 ## Usage Guide
 
-1. **Integration**: Connect DocIntel to your ERP or financial system by listening to the `VALIDATE` event in the audit logs.
-2. **HITL Workflow**: Use the DocIntel dashboard to review documents with low confidence scores.
+1. **Integration**: Connect DocManager to your ERP or financial system by listening to the `VALIDATE` event in the audit logs.
+2. **HITL Workflow**: Use the DocManager dashboard to review documents with low confidence scores.
 3. **Security**: Ensure all API keys are stored securely and rotated regularly.
