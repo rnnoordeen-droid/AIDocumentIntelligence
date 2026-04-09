@@ -5,27 +5,31 @@
 ---
 
 ## 1. The Dashboard (Real-Time Overview)
-![Dashboard Placeholder](https://picsum.photos/seed/dashboard/800/400)
+<img width="1046" height="501" alt="image" src="https://github.com/user-attachments/assets/ae9c3abd-4a4c-4d15-90cd-5f6e60ee9831" />
+
 *   **Key Feature**: Real-time metrics powered by Firestore listeners.
 *   **Technical Detail**: Uses `onSnapshot` to ensure that as soon as a document is validated by one team member, the dashboard updates for everyone instantly.
 
 ## 2. AI-Powered Upload & Extraction
-![Upload Placeholder](https://picsum.photos/seed/upload/800/400)
 
 <img width="378" height="321" alt="image" src="https://github.com/user-attachments/assets/39be3c99-b612-4a17-bf8c-d14994738894" />
+
+<img width="1048" height="452" alt="image" src="https://github.com/user-attachments/assets/f86f6be2-2e7c-4de9-b58e-72534be1e11e" />
 
 *   **The Workflow**: Users drop a PDF or Image.
 *   **The AI**: The system sends the base64 data to **Gemini 3 Flash**.
 *   **Zero-Shot Learning**: Unlike traditional OCR, DocManager doesn't need templates. It "reads" the document like a human and extracts fields based on context.
 
 ## 3. Human-in-the-Loop (HITL) Validation
-![Validation Placeholder](https://picsum.photos/seed/validate/800/400)
+<img width="1055" height="475" alt="image" src="https://github.com/user-attachments/assets/1d203168-c49d-4d97-ab3f-0df67713684b" />
+
 *   **Side-by-Side Review**: High-fidelity PDF/Image preview on the left, editable AI data on the right.
 *   **Confidence Scoring**: Fields with <80% confidence are automatically highlighted in red to prevent human error.
 *   **Read-Only Mode**: Once validated, documents switch to a read-only state to maintain data integrity.
 
 ## 4. Secure Audit Trails
-![Audit Placeholder](https://picsum.photos/seed/audit/800/400)
+<img width="936" height="471" alt="image" src="https://github.com/user-attachments/assets/da3be67a-7241-499f-b417-dc684e221c49" />
+
 *   **Compliance**: Every action (Upload, Validate, Reject) is logged.
 *   **Security**: Firestore Security Rules ensure that only authorized users can modify documents or view logs.
 
