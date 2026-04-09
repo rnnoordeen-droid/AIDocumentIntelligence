@@ -1,6 +1,6 @@
 # DocManager: Product Demo & Technical Showcase
 
-> **Note to Hiring Managers**: This document serves as a visual walkthrough of the DocManager application. It highlights the core features, AI integration, and architectural decisions.
+> **Note**: This document serves as a visual walkthrough of the DocManager application. It highlights the core features, AI integration, and architectural decisions.
 
 ---
 
@@ -11,6 +11,9 @@
 
 ## 2. AI-Powered Upload & Extraction
 ![Upload Placeholder](https://picsum.photos/seed/upload/800/400)
+
+<img width="378" height="321" alt="image" src="https://github.com/user-attachments/assets/39be3c99-b612-4a17-bf8c-d14994738894" />
+
 *   **The Workflow**: Users drop a PDF or Image.
 *   **The AI**: The system sends the base64 data to **Gemini 3 Flash**.
 *   **Zero-Shot Learning**: Unlike traditional OCR, DocManager doesn't need templates. It "reads" the document like a human and extracts fields based on context.
