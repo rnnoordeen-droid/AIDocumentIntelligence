@@ -1,0 +1,5 @@
+{
+  "name": "DocManager",
+  "description": "AI-powererdocument parsing and management system with HITL validation, audit trails, and RBAC.",
+  "requestFramePermissions": []
+}

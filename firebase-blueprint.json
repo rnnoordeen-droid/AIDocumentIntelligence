@@ -1,0 +1,72 @@
+{
+  "entities": {
+    "SCFDocument": {
+      "title": "SCF Document",
+      "description": "A supply chain finance document with extracted data and status.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the document" },
+        "fileName": { "type": "string", "description": "Original file name" },
+        "fileUrl": { "type": "string", "description": "URL to the stored file" },
+        "fileType": { "type": "string", "description": "Type of document (e.g., Invoice, Bill of Lading)" },
+        "status": { 
+          "type": "string", 
+          "enum": ["pending", "processing", "validated", "rejected"],
+          "description": "Current processing status"
+        },
+        "uploadDate": { "type": "string", "format": "date-time", "description": "ISO timestamp of upload" },
+        "uploadedBy": { "type": "string", "description": "Email of the uploader" },
+        "validatedBy": { "type": "string", "description": "Email of the validator" },
+        "validationDate": { "type": "string", "format": "date-time", "description": "ISO timestamp of validation" },
+        "extractedData": {
+          "type": "object",
+          "properties": {
+            "vendorName": { "type": "string" },
+            "invoiceNumber": { "type": "string" },
+            "date": { "type": "string" },
+            "amount": { "type": "number" },
+            "currency": { "type": "string" },
+            "lineItems": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "description": { "type": "string" },
+                  "quantity": { "type": "number" },
+                  "unitPrice": { "type": "number" },
+                  "total": { "type": "number" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "required": ["id", "fileName", "status", "uploadDate", "uploadedBy"]
+    },
+    "AuditLog": {
+      "title": "Audit Log",
+      "description": "A record of an action performed on a document.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "documentId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "action": { "type": "string", "enum": ["UPLOAD", "VALIDATE", "REJECT", "EDIT"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "details": { "type": "string" }
+      },
+      "required": ["id", "documentId", "userId", "userName", "action", "timestamp", "details"]
+    }
+  },
+  "firestore": {
+    "/documents/{docId}": {
+      "schema": "SCFDocument",
+      "description": "Collection of SCF documents"
+    },
+    "/auditLogs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Global audit trail for all documents"
+    }
+  }
+}

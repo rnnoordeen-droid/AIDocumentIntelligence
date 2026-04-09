@@ -1,0 +1,133 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - name: string (required)
+    //   - email: string (required, email format)
+    //   - role: string (required, ['admin', 'validator', 'viewer'])
+    //
+    // Collection: documents
+    // Document ID: {docId}
+    // Fields:
+    //   - id: string (required)
+    //   - fileName: string (required)
+    //   - fileUrl: string (optional)
+    //   - base64Content: string (optional, for preview)
+    //   - fileType: string (required)
+    //   - status: string (required, ['pending', 'processing', 'validated', 'rejected'])
+    //   - uploadDate: string (required, ISO 8601)
+    //   - uploadedBy: string (required, email)
+    //   - validatedBy: string (optional, email)
+    //   - validationDate: string (optional, ISO 8601)
+    //   - extractedData: map (optional)
+    //
+    // Collection: auditLogs
+    // Document ID: {logId}
+    // Fields:
+    //   - id: string (required)
+    //   - documentId: string (required)
+    //   - userId: string (required)
+    //   - userName: string (required)
+    //   - action: string (required, ['UPLOAD', 'VALIDATE', 'REJECT', 'EDIT'])
+    //   - timestamp: string (required, ISO 8601)
+    //   - details: string (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        ((request.auth.token.email == "rn.noordeen@gmail.com" && request.auth.token.email_verified == true) ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+    }
+
+    function isValidator() {
+      return isAdmin() || 
+        (isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'validator');
+    }
+
+    function isValidEmail(email) {
+      return email is string &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string &&
+        dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      // Users can only read their own profile, unless they are admin
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Only admins can create or update users (RBAC management)
+      // Exception: Users can create their own initial profile if it's not an admin role
+      allow create: if isAuthenticated() && 
+        (
+          (isOwner(userId) && request.resource.data.role == 'viewer') || 
+          isAdmin()
+        );
+      
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /documents/{docId} {
+      // All authenticated users can read documents in this corporate app
+      allow read: if isAuthenticated();
+      
+      // Any authenticated user can upload a document
+      allow create: if isAuthenticated() && 
+        hasOnlyAllowedFields(['id', 'fileName', 'fileUrl', 'base64Content', 'fileType', 'status', 'uploadDate', 'uploadedBy', 'extractedData']) &&
+        request.resource.data.status == 'pending' &&
+        isValidDateString(request.resource.data.uploadDate);
+      
+      // Only validators or admins can update document status or extracted data
+      allow update: if isValidator() &&
+        request.resource.data.uploadDate == resource.data.uploadDate && // Immutable metadata
+        request.resource.data.uploadedBy == resource.data.uploadedBy &&
+        request.resource.data.status in ['pending', 'processing', 'validated', 'rejected'];
+      
+      allow delete: if isAdmin();
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid &&
+        isValidDateString(request.resource.data.timestamp);
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}
