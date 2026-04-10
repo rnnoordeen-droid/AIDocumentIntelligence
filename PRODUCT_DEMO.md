@@ -23,16 +23,26 @@
 
 ## 4. Enterprise Security & Compliance
 ![Security Placeholder](https://picsum.photos/seed/security/800/400)
-*   **PII Redaction**: A one-click toggle masks sensitive data (SSNs, Account Numbers) for unauthorized roles, ensuring GDPR and banking compliance.
+*   **PII Redaction**: A one-click toggle masks sensitive data (ID Numbers, Account Details) for unauthorized roles, ensuring GDPR and data privacy compliance.
 *   **Fraud Detection**: The AI automatically flags documents with inconsistent fonts or digital artifacts that suggest Photoshop tampering.
 *   **Compliance Score**: A real-time dashboard metric showing the health of your document processing pipeline.
 
-## 5. Integration Hub (Webhooks)
+## 5. Integration Hub (Dedicated Module)
 ![Integration Placeholder](https://picsum.photos/seed/integration/800/400)
-*   **Automation**: Configure webhook endpoints to automatically push validated data into SAP, Oracle, or custom core banking APIs.
-*   **Real-time Sync**: Eliminates manual data entry and reduces the "time-to-money" for financial transactions.
+*   **Centralized Connectivity**: Now accessible directly from the main sidebar for instant configuration.
+*   **Automation**: Configure webhook endpoints and access REST API documentation (curl examples provided) to push validated data into SAP, Oracle, or custom enterprise systems.
 
-## 6. Secure Audit Trails
+## 6. Visual Inspection & Data-Centric AI (Landing AI Inspired)
+![Visual Inspection Placeholder](https://picsum.photos/seed/visual/800/400)
+*   **Detection Overlays**: Visual bounding boxes highlight exactly where the AI "looked" to find the Vendor Name, Date, and Amount.
+*   **Feedback Loop**: Users can click the "Zap" icon next to any field to provide feedback, ensuring the model learns from human expertise over time.
+
+## 7. Usage Tutorial (Onboarding)
+![Tutorial Placeholder](https://picsum.photos/seed/tutorial/800/400)
+*   **Simplified Onboarding**: A dedicated sidebar module that explains the app's features in simple, non-technical language.
+*   **Step-by-Step Guide**: Helps users understand the Upload -> AI Magic -> Validate workflow in seconds.
+
+## 8. Secure Audit Trails
 ![Audit Placeholder](https://picsum.photos/seed/audit/800/400)
 *   **Compliance**: Every action (Upload, Validate, Reject) is logged.
 *   **Security**: Firestore Security Rules ensure that only authorized users can modify documents or view logs.

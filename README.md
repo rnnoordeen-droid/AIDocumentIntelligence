@@ -6,8 +6,11 @@ DocManager is a production-ready Single Page Application (SPA) designed for auto
 
 - **Dynamic AI Extraction**: Automatically classifies any document type (Invoices, Contracts, IDs, etc.) and extracts all meaningful fields without pre-defined templates.
 - **AI Fraud Detection**: Inspects documents for signs of digital tampering, inconsistent fonts, and artifacts using Gemini's vision capabilities.
-- **PII Redaction Engine**: Automatically identifies sensitive data (SSNs, Account Numbers) and allows for role-based masking.
-- **Integration Hub**: Configure webhooks to automatically push validated data to core banking or ERP systems.
+- **PII Redaction Engine**: Automatically identifies sensitive data (ID Numbers, Account Details) and allows for role-based masking.
+- **Integration Hub**: A dedicated sidebar module to configure webhooks and access REST API documentation, enabling seamless data flow to enterprise ERP or custom systems.
+- **Usage Tutorial**: Built-in interactive guide to help new users get started with the platform in seconds.
+- **Visual Inspection Overlays**: Inspired by Landing AI, the validation view now features visual bounding boxes on document previews, showing exactly where the AI identified key data points.
+- **Data-Centric AI Feedback**: Users can provide direct feedback to the model on specific field extractions, creating a continuous improvement loop for AI accuracy.
 - **Compliance Dashboard**: Real-time "Compliance Score" tracking based on AI confidence and fraud analysis.
 - **Live Document Preview**: High-fidelity preview of PDFs and images directly within the validation interface.
 - **HITL Validation**: Intuitive UI for human reviewers to verify and correct AI-extracted data.
@@ -39,7 +42,8 @@ DocManager is a production-ready Single Page Application (SPA) designed for auto
 
 ## 📖 Usage
 
-1. **Dashboard**: View system-wide metrics and recent activity.
+1. **Usage Tutorial**: Check the "Usage Tutorial" tab in the sidebar for a simple, step-by-step guide on how to use the system.
+2. **Dashboard**: View system-wide metrics and recent activity.
 2. **Upload**: Drag and drop any document. The AI will classify it and extract data in seconds.
 3. **Validate**: Review the extracted fields side-by-side with the document preview.
 4. **Audit**: Track every modification in the Audit Trails tab.

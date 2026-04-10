@@ -32,7 +32,11 @@ import {
   Lock,
   Unlock,
   Zap,
-  ChevronLeft
+  ChevronLeft,
+  HelpCircle,
+  Info,
+  Lightbulb,
+  BookOpen
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
@@ -353,7 +357,7 @@ export default function App() {
 
       setIsValidatingView(false);
       setSelectedDoc(null);
-      toast.success("Document validated and integrated with financial system");
+      toast.success("Document validated and integrated with enterprise system");
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `documents/${docObj.id}`);
     }
@@ -475,6 +479,18 @@ export default function App() {
             label="Audit Logs" 
             active={activeTab === 'audit'} 
             onClick={() => setActiveTab('audit')} 
+          />
+          <NavItem 
+            icon={<Globe size={20} />} 
+            label="Integration Hub" 
+            active={activeTab === 'integrations'} 
+            onClick={() => setActiveTab('integrations')} 
+          />
+          <NavItem 
+            icon={<HelpCircle size={20} />} 
+            label="Usage Tutorial" 
+            active={activeTab === 'tutorial'} 
+            onClick={() => setActiveTab('tutorial')} 
           />
           <NavItem 
             icon={<Settings size={20} />} 
@@ -812,22 +828,51 @@ export default function App() {
                         {selectedDoc.fileType}
                       </Badge>
                     </div>
-                    <div className="flex-1 bg-gray-100 flex items-center justify-center relative overflow-auto">
+                    <div className="flex-1 bg-gray-100 flex items-center justify-center relative overflow-auto group">
                       {previewUrl ? (
-                        selectedDoc.base64Content?.includes('application/pdf') ? (
-                          <iframe 
-                            src={previewUrl} 
-                            className="w-full h-full border-none"
-                            title="Document Preview"
-                          />
-                        ) : (
-                          <img 
-                            src={previewUrl} 
-                            alt="Document Preview" 
-                            className="max-w-full h-auto object-contain p-4"
-                            referrerPolicy="no-referrer"
-                          />
-                        )
+                        <>
+                          {selectedDoc.base64Content?.includes('application/pdf') ? (
+                            <iframe 
+                              src={previewUrl} 
+                              className="w-full h-full border-none"
+                              title="Document Preview"
+                            />
+                          ) : (
+                            <div className="relative">
+                              <img 
+                                src={previewUrl} 
+                                alt="Document Preview" 
+                                className="max-w-full h-auto object-contain p-4"
+                                referrerPolicy="no-referrer"
+                              />
+                              {/* Landing AI Inspired Visual Inspection Overlays */}
+                              {selectedDoc.status === 'pending' && (
+                                <>
+                                  <motion.div 
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 0.4 }}
+                                    className="absolute top-[20%] left-[15%] w-[30%] h-[5%] border-2 border-brand-accent bg-brand-accent/20 rounded cursor-help"
+                                    title="AI Detected: Vendor Name"
+                                  />
+                                  <motion.div 
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 0.4 }}
+                                    transition={{ delay: 0.2 }}
+                                    className="absolute top-[28%] left-[60%] w-[25%] h-[5%] border-2 border-indigo-500 bg-indigo-500/20 rounded cursor-help"
+                                    title="AI Detected: Invoice Date"
+                                  />
+                                  <motion.div 
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 0.4 }}
+                                    transition={{ delay: 0.4 }}
+                                    className="absolute bottom-[15%] right-[10%] w-[20%] h-[8%] border-2 border-green-500 bg-green-500/20 rounded cursor-help"
+                                    title="AI Detected: Total Amount"
+                                  />
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </>
                       ) : (
                         <div className="text-center p-12">
                           <FileText size={64} className="mx-auto text-gray-300 mb-4" />
@@ -911,7 +956,7 @@ export default function App() {
                                     {key.replace(/_/g, ' ')}
                                     {isPII && <Lock size={10} className="text-amber-500" />}
                                   </Label>
-                                  <div className="col-span-2 relative">
+                                  <div className="col-span-2 relative group/input">
                                     <Input 
                                       id={key} 
                                       value={displayValue} 
@@ -925,6 +970,17 @@ export default function App() {
                                         }
                                       }}
                                     />
+                                    {selectedDoc.status === 'pending' && (
+                                      <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        className="absolute -right-8 top-1/2 -translate-y-1/2 opacity-0 group-hover/input:opacity-100 transition-opacity h-6 w-6 text-gray-400 hover:text-brand-accent"
+                                        title="Provide Model Feedback"
+                                        onClick={() => toast.info(`Feedback recorded for ${key}. Our Data-Centric AI will use this to improve future extractions.`)}
+                                      >
+                                        <Zap size={12} />
+                                      </Button>
+                                    )}
                                     {confidence < 1 && (
                                       <div className={`absolute -right-12 top-1/2 -translate-y-1/2 text-[10px] font-bold ${isLowConfidence ? 'text-red-500' : 'text-gray-400'}`}>
                                         {Math.round(confidence * 100)}%
@@ -975,6 +1031,232 @@ export default function App() {
               </motion.div>
             )}
 
+            {activeTab === 'integrations' && !isValidatingView && (
+              <motion.div
+                key="integrations"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-8 p-8"
+              >
+                <div>
+                  <h2 className="text-2xl font-bold text-brand-primary">Integration Hub</h2>
+                  <p className="text-gray-500">Connect DocManager to your enterprise ecosystem via Webhooks and REST APIs.</p>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  <div className="lg:col-span-2 space-y-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Globe size={20} className="text-brand-accent" />
+                          Webhook Configuration
+                        </CardTitle>
+                        <CardDescription>Automatically push validated document data to your enterprise or ERP systems.</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="webhook-url" className="text-xs font-bold uppercase text-gray-400">Webhook Endpoint URL</Label>
+                          <div className="flex gap-2">
+                            <Input 
+                              id="webhook-url" 
+                              placeholder="https://api.yourcompany.com/v1/ingest" 
+                              value={webhookUrl}
+                              onChange={(e) => setWebhookUrl(e.target.value)}
+                              className="bg-gray-50"
+                            />
+                            <Button variant="outline" onClick={() => {
+                              if (webhookUrl) toast.success("Webhook endpoint saved and verified");
+                              else toast.error("Please enter a valid URL");
+                            }}>Save</Button>
+                          </div>
+                          <p className="text-[10px] text-gray-400 italic">
+                            DocManager will send a POST request with the validated JSON payload to this address.
+                          </p>
+                        </div>
+
+                        <div className="space-y-4 pt-4 border-t">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400">Active Connections</h4>
+                          <div className="flex items-center justify-between p-4 border rounded-lg bg-blue-50/30 border-blue-100">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-blue-100 rounded flex items-center justify-center">
+                                <ExternalLink className="text-blue-600" size={20} />
+                              </div>
+                              <div>
+                                <p className="font-bold text-sm text-blue-900">Enterprise ERP System (REST)</p>
+                                <p className="text-xs text-blue-600">Connected • Last sync: 5 mins ago</p>
+                              </div>
+                            </div>
+                            <Badge className="bg-blue-200 text-blue-800 border-none">Active</Badge>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Database size={20} className="text-indigo-600" />
+                          API Documentation
+                        </CardTitle>
+                        <CardDescription>Use our REST API to programmatically upload and manage documents.</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="p-4 bg-slate-900 rounded-lg font-mono text-xs text-slate-300 overflow-x-auto">
+                          <p className="text-slate-500"># Upload a document</p>
+                          <p>curl -X POST https://api.docmanager.io/v1/upload \</p>
+                          <p>  -H "Authorization: Bearer YOUR_API_KEY" \</p>
+                          <p>  -F "file=@invoice.pdf" \</p>
+                          <p>  -F "type=invoice"</p>
+                        </div>
+                        <Button variant="outline" className="w-full gap-2">
+                          <FileText size={14} />
+                          View Full API Reference
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <div className="space-y-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Integration Health</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-500">Uptime</span>
+                          <span className="text-sm font-bold text-green-600">99.98%</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-500">Avg. Latency</span>
+                          <span className="text-sm font-bold">245ms</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-500">Success Rate</span>
+                          <span className="text-sm font-bold">100%</span>
+                        </div>
+                        <div className="pt-4 border-t">
+                          <Button variant="outline" className="w-full text-xs">View Error Logs</Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'tutorial' && !isValidatingView && (
+              <motion.div
+                key="tutorial"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-8 p-8"
+              >
+                <div>
+                  <h2 className="text-2xl font-bold text-brand-primary">Usage Tutorial</h2>
+                  <p className="text-gray-500">Learn how to use DocManager in 3 simple steps.</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                  <Card className="relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                      <Upload size={80} />
+                    </div>
+                    <CardHeader>
+                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 mb-2 font-bold">1</div>
+                      <CardTitle>Upload</CardTitle>
+                      <CardDescription>Click the "Upload Document" button. You can pick any file like an invoice, a contract, or even a photo of a document.</CardDescription>
+                    </CardHeader>
+                  </Card>
+
+                  <Card className="relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                      <Zap size={80} />
+                    </div>
+                    <CardHeader>
+                      <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center text-amber-600 mb-2 font-bold">2</div>
+                      <CardTitle>AI Magic</CardTitle>
+                      <CardDescription>Our AI reads the document for you. It finds names, dates, and amounts automatically. It even checks if the document looks fake!</CardDescription>
+                    </CardHeader>
+                  </Card>
+
+                  <Card className="relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                      <CheckCircle2 size={80} />
+                    </div>
+                    <CardHeader>
+                      <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center text-green-600 mb-2 font-bold">3</div>
+                      <CardTitle>Validate</CardTitle>
+                      <CardDescription>Check the data on the right. If it's correct, hit "Approve". The data is then sent to your other systems automatically.</CardDescription>
+                    </CardHeader>
+                  </Card>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Lightbulb className="text-amber-500" size={20} />
+                        Cool Features Explained
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors">
+                        <div className="shrink-0 mt-1"><Lock size={18} className="text-brand-accent" /></div>
+                        <div>
+                          <p className="font-bold text-sm">Redaction (Privacy)</p>
+                          <p className="text-xs text-gray-500">Turn this on to hide sensitive info like ID numbers. Great for keeping data private!</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors">
+                        <div className="shrink-0 mt-1"><ShieldAlert size={18} className="text-red-500" /></div>
+                        <div>
+                          <p className="font-bold text-sm">Fraud Detection</p>
+                          <p className="text-xs text-gray-500">The AI looks for signs of "Photoshop" or tampering. If it sees something fishy, it warns you.</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors">
+                        <div className="shrink-0 mt-1"><Globe size={18} className="text-blue-500" /></div>
+                        <div>
+                          <p className="font-bold text-sm">Integration Hub</p>
+                          <p className="text-xs text-gray-500">Connect to your other apps. Once you approve a doc, we send the data there so you don't have to type it again.</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-brand-primary text-white border-none shadow-xl">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <BookOpen size={20} />
+                        Pro Tips
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <ul className="space-y-3 text-sm text-white/80">
+                        <li className="flex gap-2">
+                          <div className="w-1.5 h-1.5 bg-brand-accent rounded-full mt-1.5 shrink-0" />
+                          Use high-quality photos or PDFs for the best AI accuracy.
+                        </li>
+                        <li className="flex gap-2">
+                          <div className="w-1.5 h-1.5 bg-brand-accent rounded-full mt-1.5 shrink-0" />
+                          Check the "Confidence Score". If it's low, double-check the data!
+                        </li>
+                        <li className="flex gap-2">
+                          <div className="w-1.5 h-1.5 bg-brand-accent rounded-full mt-1.5 shrink-0" />
+                          You can edit any field before approving if the AI made a small mistake.
+                        </li>
+                        <li className="flex gap-2">
+                          <div className="w-1.5 h-1.5 bg-brand-accent rounded-full mt-1.5 shrink-0" />
+                          The "Audit Log" keeps track of everything, so you never lose your history.
+                        </li>
+                      </ul>
+                    </CardContent>
+                  </Card>
+                </div>
+              </motion.div>
+            )}
             {activeTab === 'settings' && !isValidatingView && (
               <motion.div
                 key="settings"
@@ -993,7 +1275,7 @@ export default function App() {
                     <Card>
                       <CardHeader>
                         <CardTitle>User Management & RBAC</CardTitle>
-                        <CardDescription>Assign roles to team members to control access to sensitive financial data.</CardDescription>
+                        <CardDescription>Assign roles to team members to control access to sensitive data.</CardDescription>
                       </CardHeader>
                       <CardContent>
                         <Table>
@@ -1027,53 +1309,6 @@ export default function App() {
                           </TableBody>
                         </Table>
                         <Button className="mt-4 bg-brand-accent hover:bg-brand-accent/90 text-white">Add New User</Button>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <Globe size={20} className="text-brand-accent" />
-                          Integration Hub (Webhooks)
-                        </CardTitle>
-                        <CardDescription>Automatically push validated document data to your core banking or ERP systems.</CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-6">
-                        <div className="space-y-2">
-                          <Label htmlFor="webhook-url" className="text-xs font-bold uppercase text-gray-400">Webhook Endpoint URL</Label>
-                          <div className="flex gap-2">
-                            <Input 
-                              id="webhook-url" 
-                              placeholder="https://api.yourbank.com/v1/ingest" 
-                              value={webhookUrl}
-                              onChange={(e) => setWebhookUrl(e.target.value)}
-                              className="bg-gray-50"
-                            />
-                            <Button variant="outline" onClick={() => {
-                              if (webhookUrl) toast.success("Webhook endpoint saved and verified");
-                              else toast.error("Please enter a valid URL");
-                            }}>Save</Button>
-                          </div>
-                          <p className="text-[10px] text-gray-400 italic">
-                            DocManager will send a POST request with the validated JSON payload to this address.
-                          </p>
-                        </div>
-
-                        <div className="space-y-4 pt-4 border-t">
-                          <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400">Active Connections</h4>
-                          <div className="flex items-center justify-between p-4 border rounded-lg bg-blue-50/30 border-blue-100">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-blue-100 rounded flex items-center justify-center">
-                                <ExternalLink className="text-blue-600" size={20} />
-                              </div>
-                              <div>
-                                <p className="font-bold text-sm text-blue-900">Core Banking API (REST)</p>
-                                <p className="text-xs text-blue-600">Connected • Last sync: 5 mins ago</p>
-                              </div>
-                            </div>
-                            <Badge className="bg-blue-200 text-blue-800 border-none">Active</Badge>
-                          </div>
-                        </div>
                       </CardContent>
                     </Card>
                   </div>

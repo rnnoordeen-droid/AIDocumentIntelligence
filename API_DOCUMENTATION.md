@@ -59,6 +59,6 @@ Manually confirms the extracted data and marks the document as 'validated'.
 
 ## Usage Guide
 
-1. **Integration**: Connect DocManager to your ERP or financial system by listening to the `VALIDATE` event in the audit logs.
+1. **Integration**: Connect DocManager to your ERP or enterprise system by listening to the `VALIDATE` event in the audit logs.
 2. **HITL Workflow**: Use the DocManager dashboard to review documents with low confidence scores.
 3. **Security**: Ensure all API keys are stored securely and rotated regularly.

@@ -23,7 +23,7 @@ export async function parseDocument(base64Data: string, mimeType: string): Promi
 4. Assign a confidence score (0-1) for the extraction overall.
 5. Assign a confidence score (0-1) for EACH extracted field.
 6. FRAUD DETECTION: Inspect the document for signs of digital tampering (inconsistent fonts, overlapping text blocks, mismatched alignment, or digital artifacts). 
-7. PII IDENTIFICATION: Identify which extracted fields contain sensitive PII (e.g., SSN, Account Numbers, Tax IDs).
+7. PII IDENTIFICATION: Identify which extracted fields contain sensitive PII (e.g., ID Numbers, Account Details, Tax Identifiers).
 
 Return the data in the following JSON structure:
 {
