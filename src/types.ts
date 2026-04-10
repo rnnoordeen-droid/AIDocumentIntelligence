@@ -35,6 +35,7 @@ export interface ExtractedData {
     confidence: number;
   };
   piiFields?: string[];
+  fieldCoordinates?: Record<string, { top: number; left: number; width: number; height: number }>;
   validationResults?: {
     ruleId: string;
     passed: boolean;

@@ -117,6 +117,7 @@ export default function App() {
   const [selectedBlueprint, setSelectedBlueprint] = useState<DocumentBlueprint | null>(null);
   const [uploadBlueprintId, setUploadBlueprintId] = useState<string>('none');
   const [complianceScore, setComplianceScore] = useState(0);
+  const [activeField, setActiveField] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -929,6 +930,12 @@ export default function App() {
                       <h2 className="text-2xl font-bold text-brand-primary">Document Validation</h2>
                       <p className="text-gray-500 flex items-center gap-2">
                         {selectedDoc.fileName} • {getStatusBadge(selectedDoc.status)}
+                        {selectedDoc.extractedData?.fieldCoordinates && Object.keys(selectedDoc.extractedData.fieldCoordinates).length > 0 && (
+                          <Badge variant="outline" className="bg-brand-accent/5 text-brand-accent border-brand-accent/20 gap-1 h-5 px-1.5 text-[9px]">
+                            <Zap size={10} />
+                            AI Localization Active
+                          </Badge>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -968,6 +975,40 @@ export default function App() {
                           <MessageSquare size={18} />
                           Submit Issue
                         </Button>
+                        <Button 
+                          variant="outline" 
+                          className="gap-2 border-brand-accent text-brand-accent hover:bg-brand-accent/5"
+                          onClick={async () => {
+                            if (!selectedDoc || !selectedDoc.base64Content) return;
+                            setIsParsing(true);
+                            try {
+                              const base64Data = selectedDoc.base64Content.split(',')[1];
+                              const blueprint = uploadBlueprintId !== 'none' ? blueprints.find(b => b.id === uploadBlueprintId) : undefined;
+                              const schema = blueprint ? {
+                                documentType: blueprint.documentType,
+                                fields: blueprint.fields.reduce((acc, f) => ({ ...acc, [f.name]: f.type }), {})
+                              } : undefined;
+
+                              const extractedData = await parseDocument(base64Data, selectedDoc.fileType.includes('PDF') ? 'application/pdf' : 'image/jpeg', schema);
+                              
+                              if (blueprint) {
+                                extractedData.validationResults = validateDataAgainstBlueprint(extractedData.fields, blueprint);
+                              }
+
+                              const docRef = doc(db, 'documents', selectedDoc.id);
+                              await updateDoc(docRef, { extractedData });
+                              toast.success("AI Re-analysis complete! Visual overlays generated.");
+                            } catch (err) {
+                              console.error("Re-analysis error:", err);
+                              toast.error("Failed to re-analyze document.");
+                            } finally {
+                              setIsParsing(false);
+                            }
+                          }}
+                        >
+                          <Zap size={18} />
+                          Re-analyze with AI
+                        </Button>
                         <Button variant="outline" onClick={() => setIsValidatingView(false)}>Close Review</Button>
                       </div>
                     )}
@@ -995,17 +1036,27 @@ export default function App() {
                               />
                               {/* Visual Inspection Overlays for PDF */}
                               <div className="absolute inset-0 pointer-events-none">
-                                <motion.div 
-                                  initial={{ opacity: 0 }}
-                                  animate={{ opacity: 0.3 }}
-                                  className="absolute top-[15%] left-[10%] w-[40%] h-[10%] border-2 border-brand-accent bg-brand-accent/10 rounded"
-                                />
-                                <motion.div 
-                                  initial={{ opacity: 0 }}
-                                  animate={{ opacity: 0.3 }}
-                                  transition={{ delay: 0.2 }}
-                                  className="absolute top-[30%] left-[55%] w-[30%] h-[8%] border-2 border-indigo-500 bg-indigo-500/10 rounded"
-                                />
+                                {selectedDoc.extractedData?.fieldCoordinates && Object.entries(selectedDoc.extractedData.fieldCoordinates).map(([fieldName, coords]) => (
+                                  <motion.div 
+                                    key={fieldName}
+                                    initial={{ opacity: 0 }}
+                                    animate={{ 
+                                      opacity: activeField === fieldName ? 0.6 : 0.2,
+                                      scale: activeField === fieldName ? 1.02 : 1
+                                    }}
+                                    className={`absolute border-2 rounded transition-all duration-200 ${
+                                      activeField === fieldName 
+                                        ? 'border-brand-accent bg-brand-accent/20 z-10' 
+                                        : 'border-indigo-400 bg-indigo-400/5'
+                                    }`}
+                                    style={{
+                                      top: `${coords.top}%`,
+                                      left: `${coords.left}%`,
+                                      width: `${coords.width}%`,
+                                      height: `${coords.height}%`,
+                                    }}
+                                  />
+                                ))}
                               </div>
                             </div>
                           ) : (
@@ -1018,26 +1069,28 @@ export default function App() {
                               />
                               {/* Landing AI Inspired Visual Inspection Overlays */}
                               <div className="absolute inset-0 pointer-events-none">
-                                <motion.div 
-                                  initial={{ opacity: 0 }}
-                                  animate={{ opacity: 0.5 }}
-                                  className="absolute top-[20%] left-[15%] w-[30%] h-[5%] border-2 border-brand-accent bg-brand-accent/20 rounded"
-                                  title="AI Detected: Vendor Name"
-                                />
-                                <motion.div 
-                                  initial={{ opacity: 0 }}
-                                  animate={{ opacity: 0.5 }}
-                                  transition={{ delay: 0.2 }}
-                                  className="absolute top-[28%] left-[60%] w-[25%] h-[5%] border-2 border-indigo-500 bg-indigo-500/20 rounded"
-                                  title="AI Detected: Invoice Date"
-                                />
-                                <motion.div 
-                                  initial={{ opacity: 0 }}
-                                  animate={{ opacity: 0.5 }}
-                                  transition={{ delay: 0.4 }}
-                                  className="absolute bottom-[15%] right-[10%] w-[20%] h-[8%] border-2 border-green-500 bg-green-500/20 rounded"
-                                  title="AI Detected: Total Amount"
-                                />
+                                {selectedDoc.extractedData?.fieldCoordinates && Object.entries(selectedDoc.extractedData.fieldCoordinates).map(([fieldName, coords]) => (
+                                  <motion.div 
+                                    key={fieldName}
+                                    initial={{ opacity: 0 }}
+                                    animate={{ 
+                                      opacity: activeField === fieldName ? 0.6 : 0.3,
+                                      scale: activeField === fieldName ? 1.02 : 1
+                                    }}
+                                    className={`absolute border-2 rounded transition-all duration-200 ${
+                                      activeField === fieldName 
+                                        ? 'border-brand-accent bg-brand-accent/20 z-10' 
+                                        : 'border-indigo-400 bg-indigo-400/10'
+                                    }`}
+                                    style={{
+                                      top: `${coords.top}%`,
+                                      left: `${coords.left}%`,
+                                      width: `${coords.width}%`,
+                                      height: `${coords.height}%`,
+                                    }}
+                                    title={`AI Detected: ${fieldName}`}
+                                  />
+                                ))}
                               </div>
                             </div>
                           )}
@@ -1151,6 +1204,10 @@ export default function App() {
                                         id={key} 
                                         value={displayValue} 
                                         readOnly={selectedDoc.status !== 'pending' || (isRedactionEnabled && isPII)}
+                                        onMouseEnter={() => setActiveField(key)}
+                                        onMouseLeave={() => setActiveField(null)}
+                                        onFocus={() => setActiveField(key)}
+                                        onBlur={() => setActiveField(null)}
                                         className={`text-sm focus-visible:ring-brand-accent min-h-[80px] resize-none ${
                                           isLowConfidence && selectedDoc.status === 'pending' ? 'border-red-300 bg-red-50/30' : ''
                                         } ${isRedactionEnabled && isPII ? 'bg-gray-50 font-mono text-gray-400' : ''}`}
@@ -1165,6 +1222,10 @@ export default function App() {
                                         id={key} 
                                         value={displayValue} 
                                         readOnly={selectedDoc.status !== 'pending' || (isRedactionEnabled && isPII)}
+                                        onMouseEnter={() => setActiveField(key)}
+                                        onMouseLeave={() => setActiveField(null)}
+                                        onFocus={() => setActiveField(key)}
+                                        onBlur={() => setActiveField(null)}
                                         className={`h-9 text-sm focus-visible:ring-brand-accent ${
                                           isLowConfidence && selectedDoc.status === 'pending' ? 'border-red-300 bg-red-50/30' : ''
                                         } ${isRedactionEnabled && isPII ? 'bg-gray-50 font-mono text-gray-400' : ''}`}
@@ -1214,7 +1275,12 @@ export default function App() {
                             </h4>
                             <div className="space-y-3">
                               {value.map((item, idx) => (
-                                <div key={idx} className="p-3 bg-gray-50 rounded-lg border border-gray-100 text-[11px] space-y-1 shadow-sm">
+                                <div 
+                                  key={idx} 
+                                  className="p-3 bg-gray-50 rounded-lg border border-gray-100 text-[11px] space-y-1 shadow-sm hover:border-brand-accent transition-colors cursor-default"
+                                  onMouseEnter={() => setActiveField(key)}
+                                  onMouseLeave={() => setActiveField(null)}
+                                >
                                   {Object.entries(item).map(([iKey, iVal]) => (
                                     <div key={iKey} className="grid grid-cols-2 gap-2">
                                       <span className="text-gray-400 capitalize text-right">{iKey.replace(/_/g, ' ')}:</span>

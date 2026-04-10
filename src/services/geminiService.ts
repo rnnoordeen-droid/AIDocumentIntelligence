@@ -30,6 +30,12 @@ Only extract these fields. If a field is not found, return null for it.`
 5. Assign a confidence score (0-1) for EACH extracted field.
 6. FRAUD DETECTION: Inspect the document for signs of digital tampering (inconsistent fonts, overlapping text blocks, mismatched alignment, or digital artifacts). 
 7. PII IDENTIFICATION: Identify which extracted fields contain sensitive PII (e.g., ID Numbers, Account Details, Tax Identifiers).
+8. VISUAL LOCALIZATION: For each extracted field, provide its approximate bounding box coordinates on the document page. Use normalized coordinates (0-100) where (0,0) is top-left and (100,100) is bottom-right.
+   - "top": distance from top edge
+   - "left": distance from left edge
+   - "width": width of the field area
+   - "height": height of the field area
+   CRITICAL: You MUST provide coordinates for EVERY field in the 'fields' object. If you cannot find a precise location, provide your best estimate based on the document layout.
 
 Return the data in the following JSON structure:
 {
@@ -37,6 +43,10 @@ Return the data in the following JSON structure:
   "confidenceScore": number,
   "fieldConfidence": {
     "field_name": number,
+    ...
+  },
+  "fieldCoordinates": {
+    "field_name": { "top": number, "left": number, "width": number, "height": number },
     ...
   },
   "summary": "string",
@@ -68,6 +78,7 @@ Ensure field names are descriptive (use snake_case or camelCase). If a field con
       documentType: result.documentType || "Unknown",
       confidenceScore: result.confidenceScore || 0,
       fieldConfidence: result.fieldConfidence || {},
+      fieldCoordinates: result.fieldCoordinates || {},
       summary: result.summary || "",
       fraudAnalysis: result.fraudAnalysis || { isSuspicious: false, reason: "", confidence: 1 },
       piiFields: result.piiFields || [],
