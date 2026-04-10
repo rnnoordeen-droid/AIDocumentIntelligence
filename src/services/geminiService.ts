@@ -22,6 +22,8 @@ export async function parseDocument(base64Data: string, mimeType: string): Promi
 3. Provide a brief summary of the document's purpose.
 4. Assign a confidence score (0-1) for the extraction overall.
 5. Assign a confidence score (0-1) for EACH extracted field.
+6. FRAUD DETECTION: Inspect the document for signs of digital tampering (inconsistent fonts, overlapping text blocks, mismatched alignment, or digital artifacts). 
+7. PII IDENTIFICATION: Identify which extracted fields contain sensitive PII (e.g., SSN, Account Numbers, Tax IDs).
 
 Return the data in the following JSON structure:
 {
@@ -32,6 +34,12 @@ Return the data in the following JSON structure:
     ...
   },
   "summary": "string",
+  "fraudAnalysis": {
+    "isSuspicious": boolean,
+    "reason": "string",
+    "confidence": number
+  },
+  "piiFields": ["field_name", ...],
   "fields": {
     "field_name": "value",
     ...
@@ -55,6 +63,8 @@ Ensure field names are descriptive (use snake_case or camelCase). If a field con
       confidenceScore: result.confidenceScore || 0,
       fieldConfidence: result.fieldConfidence || {},
       summary: result.summary || "",
+      fraudAnalysis: result.fraudAnalysis || { isSuspicious: false, reason: "", confidence: 1 },
+      piiFields: result.piiFields || [],
       fields: result.fields || {}
     };
   } catch (e) {

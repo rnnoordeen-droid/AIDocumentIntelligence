@@ -6,6 +6,12 @@ export interface ExtractedData {
   fieldConfidence?: Record<string, number>;
   fields: Record<string, any>;
   summary?: string;
+  fraudAnalysis?: {
+    isSuspicious: boolean;
+    reason: string;
+    confidence: number;
+  };
+  piiFields?: string[];
 }
 
 export interface SCFDocument {

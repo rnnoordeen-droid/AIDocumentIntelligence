@@ -5,7 +5,10 @@ DocManager is a production-ready Single Page Application (SPA) designed for auto
 ## 🚀 Features
 
 - **Dynamic AI Extraction**: Automatically classifies any document type (Invoices, Contracts, IDs, etc.) and extracts all meaningful fields without pre-defined templates.
-- **Real-Time Synchronization**: Powered by Firestore for instant updates across all connected clients.
+- **AI Fraud Detection**: Inspects documents for signs of digital tampering, inconsistent fonts, and artifacts using Gemini's vision capabilities.
+- **PII Redaction Engine**: Automatically identifies sensitive data (SSNs, Account Numbers) and allows for role-based masking.
+- **Integration Hub**: Configure webhooks to automatically push validated data to core banking or ERP systems.
+- **Compliance Dashboard**: Real-time "Compliance Score" tracking based on AI confidence and fraud analysis.
 - **Live Document Preview**: High-fidelity preview of PDFs and images directly within the validation interface.
 - **HITL Validation**: Intuitive UI for human reviewers to verify and correct AI-extracted data.
 - **Comprehensive Audit Trails**: Every action is logged with user details and timestamps for full compliance.

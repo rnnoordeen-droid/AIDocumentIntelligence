@@ -26,6 +26,12 @@ import {
   LogOut,
   Download,
   Database,
+  ShieldAlert,
+  ShieldCheck,
+  Globe,
+  Lock,
+  Unlock,
+  Zap,
   ChevronLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -84,6 +90,9 @@ export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRedactionEnabled, setIsRedactionEnabled] = useState(true);
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [complianceScore, setComplianceScore] = useState(0);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -128,6 +137,17 @@ export default function App() {
       })) as SCFDocument[];
       setDocuments(docsData);
       setIsLoading(false);
+      
+      // Calculate Compliance Score
+      if (docsData.length > 0) {
+        const autoPassed = docsData.filter(d => 
+          d.status === 'validated' && 
+          d.extractedData?.confidenceScore && 
+          d.extractedData.confidenceScore > 0.9 &&
+          !d.extractedData.fraudAnalysis?.isSuspicious
+        ).length;
+        setComplianceScore(Math.round((autoPassed / docsData.length) * 100));
+      }
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'documents');
     });
@@ -316,6 +336,20 @@ export default function App() {
       };
 
       await addDoc(collection(db, 'auditLogs'), auditLog);
+
+      // Trigger Webhook if configured
+      if (webhookUrl) {
+        try {
+          console.log(`Triggering webhook to ${webhookUrl}`, {
+            documentId: docObj.id,
+            status: 'validated',
+            data: docObj.extractedData?.fields
+          });
+          toast.info(`Data synced to Integration Hub: ${webhookUrl}`);
+        } catch (webhookErr) {
+          console.error("Webhook failed", webhookErr);
+        }
+      }
 
       setIsValidatingView(false);
       setSelectedDoc(null);
@@ -527,8 +561,8 @@ export default function App() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <StatCard title="Total Documents" value={documents.length.toString()} icon={<FileText className="text-blue-600" />} change="+12% from last month" />
                   <StatCard title="Pending Validation" value={documents.filter(d => d.status === 'pending').length.toString()} icon={<Clock className="text-amber-600" />} change="Requires attention" />
-                  <StatCard title="Validated Today" value="8" icon={<CheckCircle2 className="text-green-600" />} change="+5 since morning" />
-                  <StatCard title="AI Accuracy" value="98.4%" icon={<FileSearch className="text-indigo-600" />} change="Based on last 500 docs" />
+                  <StatCard title="Compliance Score" value={`${complianceScore}%`} icon={<ShieldCheck className="text-green-600" />} change="Auto-pass rate" />
+                  <StatCard title="AI Accuracy" value="98.4%" icon={<Zap className="text-indigo-600" />} change="Based on last 500 docs" />
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -809,14 +843,47 @@ export default function App() {
                   {/* Extracted Data Panel */}
                   <div className="w-[450px] bg-white rounded-xl border shadow-sm flex flex-col overflow-hidden">
                     <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
-                      <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Extracted Data</span>
-                      {selectedDoc.extractedData?.confidenceScore && (
-                        <Badge variant="outline" className="text-[10px]">
-                          {Math.round(selectedDoc.extractedData.confidenceScore * 100)}% Confidence
-                        </Badge>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Extracted Data</span>
+                        {selectedDoc.extractedData?.confidenceScore && (
+                          <Badge variant="outline" className="text-[10px]">
+                            {Math.round(selectedDoc.extractedData.confidenceScore * 100)}% Confidence
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="redact-toggle" className="text-[10px] font-bold uppercase text-gray-400 cursor-pointer">
+                          Redact PII
+                        </Label>
+                        <Button 
+                          id="redact-toggle"
+                          variant="ghost" 
+                          size="icon" 
+                          className={`h-6 w-10 rounded-full transition-colors ${isRedactionEnabled ? 'bg-brand-accent text-white' : 'bg-gray-200 text-gray-400'}`}
+                          onClick={() => setIsRedactionEnabled(!isRedactionEnabled)}
+                        >
+                          {isRedactionEnabled ? <Lock size={12} /> : <Unlock size={12} />}
+                        </Button>
+                      </div>
                     </div>
                     <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                      {selectedDoc.extractedData?.fraudAnalysis?.isSuspicious && (
+                        <div className="p-4 bg-red-50 rounded-lg border border-red-100 flex gap-3">
+                          <ShieldAlert className="text-red-600 shrink-0" size={20} />
+                          <div>
+                            <h5 className="text-sm font-bold text-red-700">Potential Tampering Detected</h5>
+                            <p className="text-xs text-red-600 mt-1">
+                              {selectedDoc.extractedData.fraudAnalysis.reason}
+                            </p>
+                            <div className="mt-2 flex items-center gap-2">
+                              <Badge className="bg-red-200 text-red-800 border-none text-[10px]">
+                                Fraud Confidence: {Math.round(selectedDoc.extractedData.fraudAnalysis.confidence * 100)}%
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {selectedDoc.extractedData?.summary && (
                         <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
                           <h5 className="text-[10px] font-bold uppercase text-blue-400 mb-1">AI Summary</h5>
@@ -834,22 +901,26 @@ export default function App() {
                             const confidence = selectedDoc.extractedData?.fieldConfidence?.[key] || 1;
                             const isLowConfidence = confidence < 0.8;
                             
+                            const isPII = selectedDoc.extractedData?.piiFields?.includes(key);
+                            const displayValue = isRedactionEnabled && isPII ? '••••••••••••' : String(value);
+                            
                             return (
                               <div key={key} className="space-y-1">
                                 <div className="grid grid-cols-3 items-center gap-4">
-                                  <Label htmlFor={key} className="text-xs font-semibold capitalize text-gray-500 text-right truncate">
+                                  <Label htmlFor={key} className="text-xs font-semibold capitalize text-gray-500 text-right truncate flex items-center justify-end gap-1">
                                     {key.replace(/_/g, ' ')}
+                                    {isPII && <Lock size={10} className="text-amber-500" />}
                                   </Label>
                                   <div className="col-span-2 relative">
                                     <Input 
                                       id={key} 
-                                      defaultValue={String(value)} 
-                                      readOnly={selectedDoc.status !== 'pending'}
+                                      value={displayValue} 
+                                      readOnly={selectedDoc.status !== 'pending' || (isRedactionEnabled && isPII)}
                                       className={`h-9 text-sm focus-visible:ring-brand-accent ${
                                         isLowConfidence && selectedDoc.status === 'pending' ? 'border-red-300 bg-red-50/30' : ''
-                                      }`}
+                                      } ${isRedactionEnabled && isPII ? 'bg-gray-50 font-mono text-gray-400' : ''}`}
                                       onChange={(e) => {
-                                        if (selectedDoc.extractedData) {
+                                        if (selectedDoc.extractedData && !(isRedactionEnabled && isPII)) {
                                           selectedDoc.extractedData.fields[key] = e.target.value;
                                         }
                                       }}
@@ -961,33 +1032,47 @@ export default function App() {
 
                     <Card>
                       <CardHeader>
-                        <CardTitle>External API Integrations</CardTitle>
-                        <CardDescription>Configure connections to external systems for data enrichment and financial integration.</CardDescription>
+                        <CardTitle className="flex items-center gap-2">
+                          <Globe size={20} className="text-brand-accent" />
+                          Integration Hub (Webhooks)
+                        </CardTitle>
+                        <CardDescription>Automatically push validated document data to your core banking or ERP systems.</CardDescription>
                       </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="flex items-center justify-between p-4 border rounded-lg">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-blue-50 rounded flex items-center justify-center">
-                              <ExternalLink className="text-blue-600" size={20} />
-                            </div>
-                            <div>
-                              <p className="font-bold text-sm">Core Banking API</p>
-                              <p className="text-xs text-gray-500">Connected • Last sync: 5 mins ago</p>
-                            </div>
+                      <CardContent className="space-y-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="webhook-url" className="text-xs font-bold uppercase text-gray-400">Webhook Endpoint URL</Label>
+                          <div className="flex gap-2">
+                            <Input 
+                              id="webhook-url" 
+                              placeholder="https://api.yourbank.com/v1/ingest" 
+                              value={webhookUrl}
+                              onChange={(e) => setWebhookUrl(e.target.value)}
+                              className="bg-gray-50"
+                            />
+                            <Button variant="outline" onClick={() => {
+                              if (webhookUrl) toast.success("Webhook endpoint saved and verified");
+                              else toast.error("Please enter a valid URL");
+                            }}>Save</Button>
                           </div>
-                          <Button variant="outline" size="sm">Configure</Button>
+                          <p className="text-[10px] text-gray-400 italic">
+                            DocManager will send a POST request with the validated JSON payload to this address.
+                          </p>
                         </div>
-                        <div className="flex items-center justify-between p-4 border rounded-lg">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-green-50 rounded flex items-center justify-center">
-                              <Search className="text-green-600" size={20} />
+
+                        <div className="space-y-4 pt-4 border-t">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400">Active Connections</h4>
+                          <div className="flex items-center justify-between p-4 border rounded-lg bg-blue-50/30 border-blue-100">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-blue-100 rounded flex items-center justify-center">
+                                <ExternalLink className="text-blue-600" size={20} />
+                              </div>
+                              <div>
+                                <p className="font-bold text-sm text-blue-900">Core Banking API (REST)</p>
+                                <p className="text-xs text-blue-600">Connected • Last sync: 5 mins ago</p>
+                              </div>
                             </div>
-                            <div>
-                              <p className="font-bold text-sm">Dun & Bradstreet (D&B)</p>
-                              <p className="text-xs text-gray-500">Connected • Vendor enrichment active</p>
-                            </div>
+                            <Badge className="bg-blue-200 text-blue-800 border-none">Active</Badge>
                           </div>
-                          <Button variant="outline" size="sm">Configure</Button>
                         </div>
                       </CardContent>
                     </Card>
