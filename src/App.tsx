@@ -36,12 +36,14 @@ import {
   HelpCircle,
   Info,
   Lightbulb,
-  BookOpen
+  BookOpen,
+  MessageSquare
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -498,6 +500,12 @@ export default function App() {
             active={activeTab === 'settings'} 
             onClick={() => setActiveTab('settings')} 
           />
+          <NavItem 
+            icon={<MessageSquare size={20} />} 
+            label="Submit Issue" 
+            active={false} 
+            onClick={() => toast.info("Feedback form opened. Thank you for helping us improve!")} 
+          />
         </nav>
         
         <div className="p-4 border-t border-white/10">
@@ -799,6 +807,14 @@ export default function App() {
                     {selectedDoc.status === 'pending' ? (
                       <>
                         <Button 
+                          variant="ghost" 
+                          className="text-gray-500 gap-2"
+                          onClick={() => toast.info("Feedback form opened. Thank you for helping us improve!")}
+                        >
+                          <MessageSquare size={18} />
+                          Submit Issue
+                        </Button>
+                        <Button 
                           variant="outline" 
                           className="text-red-600 border-red-200 hover:bg-red-50"
                           onClick={() => handleReject(selectedDoc)}
@@ -814,7 +830,17 @@ export default function App() {
                         </Button>
                       </>
                     ) : (
-                      <Button variant="outline" onClick={() => setIsValidatingView(false)}>Close Review</Button>
+                      <div className="flex gap-3">
+                        <Button 
+                          variant="ghost" 
+                          className="text-gray-500 gap-2"
+                          onClick={() => toast.info("Feedback form opened. Thank you for helping us improve!")}
+                        >
+                          <MessageSquare size={18} />
+                          Submit Issue
+                        </Button>
+                        <Button variant="outline" onClick={() => setIsValidatingView(false)}>Close Review</Button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -828,7 +854,7 @@ export default function App() {
                         {selectedDoc.fileType}
                       </Badge>
                     </div>
-                    <div className="flex-1 bg-gray-100 flex items-center justify-center relative overflow-auto group">
+                    <div className="flex-1 bg-gray-100 flex justify-center relative overflow-auto group">
                       {previewUrl ? (
                         <>
                           {selectedDoc.base64Content?.includes('application/pdf') ? (
@@ -838,38 +864,36 @@ export default function App() {
                               title="Document Preview"
                             />
                           ) : (
-                            <div className="relative">
+                            <div className="relative h-fit">
                               <img 
                                 src={previewUrl} 
                                 alt="Document Preview" 
-                                className="max-w-full h-auto object-contain p-4"
+                                className="max-w-full h-auto object-contain"
                                 referrerPolicy="no-referrer"
                               />
                               {/* Landing AI Inspired Visual Inspection Overlays */}
-                              {selectedDoc.status === 'pending' && (
-                                <>
-                                  <motion.div 
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 0.4 }}
-                                    className="absolute top-[20%] left-[15%] w-[30%] h-[5%] border-2 border-brand-accent bg-brand-accent/20 rounded cursor-help"
-                                    title="AI Detected: Vendor Name"
-                                  />
-                                  <motion.div 
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 0.4 }}
-                                    transition={{ delay: 0.2 }}
-                                    className="absolute top-[28%] left-[60%] w-[25%] h-[5%] border-2 border-indigo-500 bg-indigo-500/20 rounded cursor-help"
-                                    title="AI Detected: Invoice Date"
-                                  />
-                                  <motion.div 
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 0.4 }}
-                                    transition={{ delay: 0.4 }}
-                                    className="absolute bottom-[15%] right-[10%] w-[20%] h-[8%] border-2 border-green-500 bg-green-500/20 rounded cursor-help"
-                                    title="AI Detected: Total Amount"
-                                  />
-                                </>
-                              )}
+                              <>
+                                <motion.div 
+                                  initial={{ opacity: 0 }}
+                                  animate={{ opacity: 0.4 }}
+                                  className="absolute top-[20%] left-[15%] w-[30%] h-[5%] border-2 border-brand-accent bg-brand-accent/20 rounded cursor-help"
+                                  title="AI Detected: Vendor Name"
+                                />
+                                <motion.div 
+                                  initial={{ opacity: 0 }}
+                                  animate={{ opacity: 0.4 }}
+                                  transition={{ delay: 0.2 }}
+                                  className="absolute top-[28%] left-[60%] w-[25%] h-[5%] border-2 border-indigo-500 bg-indigo-500/20 rounded cursor-help"
+                                  title="AI Detected: Invoice Date"
+                                />
+                                <motion.div 
+                                  initial={{ opacity: 0 }}
+                                  animate={{ opacity: 0.4 }}
+                                  transition={{ delay: 0.4 }}
+                                  className="absolute bottom-[15%] right-[10%] w-[20%] h-[8%] border-2 border-green-500 bg-green-500/20 rounded cursor-help"
+                                  title="AI Detected: Total Amount"
+                                />
+                              </>
                             </div>
                           )}
                         </>
@@ -886,7 +910,7 @@ export default function App() {
                   </div>
 
                   {/* Extracted Data Panel */}
-                  <div className="w-[450px] bg-white rounded-xl border shadow-sm flex flex-col overflow-hidden">
+                  <div className="w-[500px] bg-white rounded-xl border shadow-sm flex flex-col overflow-hidden">
                     <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Extracted Data</span>
@@ -948,33 +972,50 @@ export default function App() {
                             
                             const isPII = selectedDoc.extractedData?.piiFields?.includes(key);
                             const displayValue = isRedactionEnabled && isPII ? '••••••••••••' : String(value);
+                            const isLongText = displayValue.length > 40 || key.toLowerCase().includes('summary') || key.toLowerCase().includes('address');
                             
                             return (
                               <div key={key} className="space-y-1">
-                                <div className="grid grid-cols-3 items-center gap-4">
-                                  <Label htmlFor={key} className="text-xs font-semibold capitalize text-gray-500 text-right truncate flex items-center justify-end gap-1">
+                                <div className="grid grid-cols-3 items-start gap-4">
+                                  <Label htmlFor={key} className="text-xs font-semibold capitalize text-gray-500 text-right mt-2 truncate flex items-center justify-end gap-1">
                                     {key.replace(/_/g, ' ')}
                                     {isPII && <Lock size={10} className="text-amber-500" />}
                                   </Label>
                                   <div className="col-span-2 relative group/input">
-                                    <Input 
-                                      id={key} 
-                                      value={displayValue} 
-                                      readOnly={selectedDoc.status !== 'pending' || (isRedactionEnabled && isPII)}
-                                      className={`h-9 text-sm focus-visible:ring-brand-accent ${
-                                        isLowConfidence && selectedDoc.status === 'pending' ? 'border-red-300 bg-red-50/30' : ''
-                                      } ${isRedactionEnabled && isPII ? 'bg-gray-50 font-mono text-gray-400' : ''}`}
-                                      onChange={(e) => {
-                                        if (selectedDoc.extractedData && !(isRedactionEnabled && isPII)) {
-                                          selectedDoc.extractedData.fields[key] = e.target.value;
-                                        }
-                                      }}
-                                    />
+                                    {isLongText ? (
+                                      <Textarea 
+                                        id={key} 
+                                        value={displayValue} 
+                                        readOnly={selectedDoc.status !== 'pending' || (isRedactionEnabled && isPII)}
+                                        className={`text-sm focus-visible:ring-brand-accent min-h-[80px] resize-none ${
+                                          isLowConfidence && selectedDoc.status === 'pending' ? 'border-red-300 bg-red-50/30' : ''
+                                        } ${isRedactionEnabled && isPII ? 'bg-gray-50 font-mono text-gray-400' : ''}`}
+                                        onChange={(e) => {
+                                          if (selectedDoc.extractedData && !(isRedactionEnabled && isPII)) {
+                                            selectedDoc.extractedData.fields[key] = e.target.value;
+                                          }
+                                        }}
+                                      />
+                                    ) : (
+                                      <Input 
+                                        id={key} 
+                                        value={displayValue} 
+                                        readOnly={selectedDoc.status !== 'pending' || (isRedactionEnabled && isPII)}
+                                        className={`h-9 text-sm focus-visible:ring-brand-accent ${
+                                          isLowConfidence && selectedDoc.status === 'pending' ? 'border-red-300 bg-red-50/30' : ''
+                                        } ${isRedactionEnabled && isPII ? 'bg-gray-50 font-mono text-gray-400' : ''}`}
+                                        onChange={(e) => {
+                                          if (selectedDoc.extractedData && !(isRedactionEnabled && isPII)) {
+                                            selectedDoc.extractedData.fields[key] = e.target.value;
+                                          }
+                                        }}
+                                      />
+                                    )}
                                     {selectedDoc.status === 'pending' && (
                                       <Button 
                                         variant="ghost" 
                                         size="icon" 
-                                        className="absolute -right-8 top-1/2 -translate-y-1/2 opacity-0 group-hover/input:opacity-100 transition-opacity h-6 w-6 text-gray-400 hover:text-brand-accent"
+                                        className="absolute -right-7 top-2 opacity-0 group-hover/input:opacity-100 transition-opacity h-6 w-6 text-gray-400 hover:text-brand-accent"
                                         title="Provide Model Feedback"
                                         onClick={() => toast.info(`Feedback recorded for ${key}. Our Data-Centric AI will use this to improve future extractions.`)}
                                       >
@@ -982,7 +1023,7 @@ export default function App() {
                                       </Button>
                                     )}
                                     {confidence < 1 && (
-                                      <div className={`absolute -right-12 top-1/2 -translate-y-1/2 text-[10px] font-bold ${isLowConfidence ? 'text-red-500' : 'text-gray-400'}`}>
+                                      <div className={`absolute -right-11 top-2 text-[10px] font-bold ${isLowConfidence ? 'text-red-500' : 'text-gray-400'}`}>
                                         {Math.round(confidence * 100)}%
                                       </div>
                                     )}
