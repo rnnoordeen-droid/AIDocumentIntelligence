@@ -4,47 +4,40 @@
 
 ---
 
+## 🎥 Product Walkthrough Video
+[![Watch the Demo](https://img.youtube.com/vi/PLACEHOLDER_ID/0.jpg)](https://www.loom.com/share/YOUR_VIDEO_ID)
+> *Tip: Record a 60-second walkthrough showing the AI extraction and visual overlays in action!*
+
+---
+
 ## 🚀 Production-Ready Document Intelligence
 DocManager is now fully optimized for production environments, featuring robust error handling, secure RBAC, and a scalable architecture designed to handle high-volume document processing.
 
 ## 1. The Dashboard (Real-Time Overview)
-![Dashboard Placeholder](https://picsum.photos/seed/dashboard/800/400)
+![Dashboard Screenshot](https://images.unsplash.com/photo-1551288049-bbbda536639a?auto=format&fit=crop&w=800&q=80)
 *   **Key Feature**: Real-time metrics powered by Firestore listeners.
 *   **Technical Detail**: Uses `onSnapshot` to ensure that as soon as a document is validated by one team member, the dashboard updates for everyone instantly.
 
 ## 2. AI-Powered Upload & Extraction
-![Upload Placeholder](https://picsum.photos/seed/upload/800/400)
+![Upload & Parsing](https://images.unsplash.com/photo-1633412802994-5c058f151b66?auto=format&fit=crop&w=800&q=80)
 *   **The Workflow**: Users drop a PDF or Image.
-*   **The AI**: The system sends the base64 data to **Gemini 3 Flash**.
+*   **The AI**: The system sends the base64 data to **Gemini 1.5 Flash**.
 *   **Zero-Shot Learning**: Unlike traditional OCR, DocManager doesn't need templates. It "reads" the document like a human and extracts fields based on context.
 
 ## 3. Human-in-the-Loop (HITL) Validation
-![Validation Placeholder](https://picsum.photos/seed/validate/800/400)
+![Validation Interface](https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=800&q=80)
 *   **Side-by-Side Review**: High-fidelity PDF/Image preview on the left, editable AI data on the right.
 *   **Confidence Scoring**: Fields with <80% confidence are automatically highlighted in red to prevent human error.
-*   **Read-Only Mode**: Once validated, documents switch to a read-only state to maintain data integrity.
 
-## 4. Enterprise Security & Compliance
-![Security Placeholder](https://picsum.photos/seed/security/800/400)
-*   **PII Redaction**: A one-click toggle masks sensitive data (ID Numbers, Account Details) for unauthorized roles, ensuring GDPR and data privacy compliance.
-*   **Fraud Detection**: The AI automatically flags documents with inconsistent fonts or digital artifacts that suggest Photoshop tampering.
-*   **Compliance Score**: A real-time dashboard metric showing the health of your document processing pipeline.
-
-## 5. Integration Hub (Dedicated Module)
-![Integration Placeholder](https://picsum.photos/seed/integration/800/400)
-*   **Centralized Connectivity**: Now accessible directly from the main sidebar for instant configuration.
-*   **Automation**: Configure webhook endpoints and access REST API documentation (curl examples provided) to push validated data into SAP, Oracle, or custom enterprise systems.
-
-## 6. Visual Inspection & Data-Centric AI (Landing AI Inspired)
-![Visual Inspection Placeholder](https://picsum.photos/seed/visual/800/400)
+## 4. Visual Inspection & Data-Centric AI (Landing AI Inspired)
+![Visual Overlays](https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=800&q=80)
 *   **Detection Overlays**: Visual bounding boxes highlight exactly where the AI "looked" to find the Vendor Name, Date, and Amount.
 *   **Feedback Loop**: Users can click the "Zap" icon next to any field to provide feedback, ensuring the model learns from human expertise over time.
 
-## 7. Document Blueprints & Automated Validation
-![Blueprint Placeholder](https://picsum.photos/seed/blueprint/800/400)
+## 5. Document Blueprints & Automated Validation
+![Blueprint Builder](https://images.unsplash.com/photo-1581291518633-83b4ebd1d83e?auto=format&fit=crop&w=800&q=80)
 *   **Schema Builder**: Define strict extraction schemas for different document types (Invoices, Contracts, IDs).
 *   **Automated Logic Checks**: Set custom validation rules (Regex, Numeric Range, Required) that automatically flag documents failing your business logic.
-*   **Predictability**: Ensures the AI always returns data in the exact structure your downstream systems expect.
 
 ## 8. Usage Tutorial (Onboarding)
 ![Tutorial Placeholder](https://picsum.photos/seed/tutorial/800/400)

@@ -17,6 +17,14 @@ Traditional OCR (Optical Character Recognition) is rigid. It breaks when a vendo
 **[The Solution: DocManager]**
 DocManager isn't just a scanner; it's an **Enterprise Document Intelligence** platform designed for the rigorous demands of modern business sectors. Now fully **production-ready**, it features a scalable architecture and robust security protocols.
 
+### 📸 Visual Showcase
+![DocManager Dashboard](https://images.unsplash.com/photo-1551288049-bbbda536639a?auto=format&fit=crop&w=800&q=80)
+*The real-time dashboard provides instant visibility into document processing health.*
+
+### 🎥 See it in Action
+[Watch the 30-second Demo Video](https://www.loom.com/share/YOUR_VIDEO_ID)
+*(I've built a full HITL workflow with dynamic AI localization and automated logic checks!)*
+
 By leveraging **Google’s Gemini AI**, the system:
 ✅ **Document Blueprints**: Define strict schemas and automated logic checks for enterprise-grade predictability.
 ✅ **Classifies** documents dynamically (no templates needed).
