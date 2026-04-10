@@ -1,8 +1,11 @@
 # DocManager: Product Demo & Technical Showcase
 
-> **Note to Hiring Managers**: This document serves as a visual walkthrough of the DocManager application. It highlights the core features, AI integration, and architectural decisions.
+> **Note to Hiring Managers**: This document serves as a visual walkthrough of the DocManager application. It highlights the core features, AI integration, and architectural decisions. For a deep-dive into the code and system design, please see our **[Technical Documentation](TECHNICAL_DOC.md)**.
 
 ---
+
+## 🚀 Production-Ready Document Intelligence
+DocManager is now fully optimized for production environments, featuring robust error handling, secure RBAC, and a scalable architecture designed to handle high-volume document processing.
 
 ## 1. The Dashboard (Real-Time Overview)
 ![Dashboard Placeholder](https://picsum.photos/seed/dashboard/800/400)

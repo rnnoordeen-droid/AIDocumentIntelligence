@@ -42,7 +42,9 @@ import {
   Plus,
   Trash2,
   Edit3,
-  Check
+  Check,
+  Terminal,
+  Code
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
@@ -623,6 +625,12 @@ export default function App() {
             label="Usage Tutorial" 
             active={activeTab === 'tutorial'} 
             onClick={() => setActiveTab('tutorial')} 
+          />
+          <NavItem 
+            icon={<Terminal size={20} />} 
+            label="Technical Guide" 
+            active={activeTab === 'technical'} 
+            onClick={() => setActiveTab('technical')} 
           />
           <NavItem 
             icon={<Settings size={20} />} 
@@ -1610,6 +1618,140 @@ export default function App() {
                 </div>
               </motion.div>
             )}
+            {activeTab === 'technical' && !isValidatingView && (
+              <motion.div
+                key="technical"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-8 p-8"
+              >
+                <div>
+                  <h2 className="text-2xl font-bold text-brand-primary">Technical Architecture</h2>
+                  <p className="text-gray-500">Deep dive into the system design and implementation details.</p>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  <div className="lg:col-span-2 space-y-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Code size={20} className="text-brand-accent" />
+                          System Architecture Diagram
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-6">
+                        <div className="p-6 bg-gray-900 rounded-xl font-mono text-xs text-brand-accent overflow-auto border border-white/10 shadow-inner">
+                          <pre>{`
+graph TD
+    User[User / Client] -->|Uploads Document| App[React Frontend]
+    App -->|Stores File| Storage[Firebase Storage / Base64]
+    App -->|Requests Extraction| Gemini[Gemini 1.5 Flash]
+    Gemini -->|Returns JSON + Coordinates| App
+    App -->|Validates Data| Blueprint[Blueprint Engine]
+    Blueprint -->|Flags Errors| App
+    App -->|Persists State| Firestore[Cloud Firestore]
+    App -->|HITL Review| User
+    User -->|Approves/Corrects| App
+    App -->|Triggers Webhook| External[External Systems]
+                          `}</pre>
+                        </div>
+                        <div className="space-y-4">
+                          <h4 className="text-sm font-bold text-gray-700">Core Implementation Details</h4>
+                          <ul className="space-y-3 text-sm text-gray-600">
+                            <li className="flex gap-3">
+                              <div className="w-1.5 h-1.5 bg-brand-accent rounded-full mt-1.5 shrink-0" />
+                              <span><strong>Schema-Driven Extraction</strong>: We inject Document Blueprints directly into the Gemini prompt to enforce strict JSON output.</span>
+                            </li>
+                            <li className="flex gap-3">
+                              <div className="w-1.5 h-1.5 bg-brand-accent rounded-full mt-1.5 shrink-0" />
+                              <span><strong>Visual Localization</strong>: The AI returns normalized coordinates (0-100) which are rendered as absolute-positioned Framer Motion overlays.</span>
+                            </li>
+                            <li className="flex gap-3">
+                              <div className="w-1.5 h-1.5 bg-brand-accent rounded-full mt-1.5 shrink-0" />
+                              <span><strong>Real-time State</strong>: Firestore listeners ensure that document status updates are synchronized across all connected clients instantly.</span>
+                            </li>
+                          </ul>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-brand-accent/5 border-brand-accent/20">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-brand-accent">
+                          <Plus size={20} />
+                          Contribute to DocManager
+                        </CardTitle>
+                        <CardDescription className="text-brand-accent/70">We welcome developers to contribute back to the repository!</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <p className="text-sm text-gray-700 leading-relaxed">
+                          DocManager is an open-source project designed to showcase the power of Data-Centric AI. We are looking for contributors to help with:
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="p-3 bg-white rounded-lg border border-brand-accent/10 shadow-sm">
+                            <p className="font-bold text-xs text-brand-primary mb-1">New Validation Rules</p>
+                            <p className="text-[10px] text-gray-500">Help us build more complex logic checks for enterprise data.</p>
+                          </div>
+                          <div className="p-3 bg-white rounded-lg border border-brand-accent/10 shadow-sm">
+                            <p className="font-bold text-xs text-brand-primary mb-1">UI/UX Improvements</p>
+                            <p className="text-[10px] text-gray-500">Enhance the HITL validation experience with better accessibility.</p>
+                          </div>
+                        </div>
+                        <Button className="w-full bg-brand-accent hover:bg-brand-accent/90 text-white gap-2 mt-2">
+                          <Globe size={16} />
+                          View Contribution Guidelines
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <div className="space-y-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-sm">Tech Stack</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-500">Frontend</span>
+                          <span className="font-mono font-bold">React 19 + TS</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-500">AI Model</span>
+                          <span className="font-mono font-bold">Gemini 1.5 Flash</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-500">Database</span>
+                          <span className="font-mono font-bold">Cloud Firestore</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-500">Auth</span>
+                          <span className="font-mono font-bold">Firebase Auth</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-500">Styling</span>
+                          <span className="font-mono font-bold">Tailwind CSS</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-gray-50 border-dashed">
+                      <CardHeader>
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <Info size={16} className="text-gray-400" />
+                          Developer Notes
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="text-[11px] text-gray-500 leading-relaxed space-y-2">
+                        <p>The application uses a <strong>Data-Centric AI</strong> approach, where the quality of the extraction is prioritized through human feedback loops.</p>
+                        <p>Security is enforced via <strong>Firestore Security Rules</strong>, ensuring that only authenticated users can access sensitive document data.</p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
             {activeTab === 'settings' && !isValidatingView && (
               <motion.div
                 key="settings"

@@ -15,7 +15,8 @@ I’m excited to share **DocManager**, a project I built to bridge this gap usin
 Traditional OCR (Optical Character Recognition) is rigid. It breaks when a vendor changes their invoice layout. It fails when a document is slightly tilted. It lacks the "intelligence" to understand context.
 
 **[The Solution: DocManager]**
-DocManager isn't just a scanner; it's an **Enterprise Document Intelligence** platform designed for the rigorous demands of modern business sectors.
+DocManager isn't just a scanner; it's an **Enterprise Document Intelligence** platform designed for the rigorous demands of modern business sectors. Now fully **production-ready**, it features a scalable architecture and robust security protocols.
+
 By leveraging **Google’s Gemini AI**, the system:
 ✅ **Document Blueprints**: Define strict schemas and automated logic checks for enterprise-grade predictability.
 ✅ **Classifies** documents dynamically (no templates needed).

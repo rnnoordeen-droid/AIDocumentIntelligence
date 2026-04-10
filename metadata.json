@@ -1,5 +1,5 @@
 {
   "name": "DocManager",
-  "description": "AI-powererdocument parsing and management system with HITL validation, audit trails, and RBAC.",
+  "description": "AI-powered document parsing and management system with HITL validation, audit trails, and RBAC.",
   "requestFramePermissions": []
 }

@@ -42,14 +42,23 @@ DocManager is a production-ready Single Page Application (SPA) designed for auto
 4. Setup Firebase:
    Add your `firebase-applet-config.json` to the root directory.
 
-## 📖 Usage
+## 📖 Documentation & Tutorials
 
-1. **Document Blueprints**: Go to the "Blueprints" tab to define a schema for your documents. This ensures the AI knows exactly what fields to look for.
-2. **Usage Tutorial**: Check the "Usage Tutorial" tab in the sidebar for a simple, step-by-step guide on how to use the system.
-3. **Dashboard**: View system-wide metrics and recent activity.
-4. **Upload**: Select a blueprint (optional) and upload your document. The AI will enforce your schema and run validation rules.
-5. **Validate**: Review the extracted fields and "Automated Logic Checks" side-by-side with the document preview.
-6. **Audit**: Track every modification in the Audit Trails tab.
+- **[Usage Tutorial](src/App.tsx)**: Interactive guide within the application.
+- **[Technical Documentation](TECHNICAL_DOC.md)**: Detailed architecture diagrams, tech stack explanation, and implementation details.
+- **[Product Demo](PRODUCT_DEMO.md)**: High-level overview of features and business value.
+
+## 🤝 Contributing
+
+We welcome contributions! DocManager is an open-source project and we'd love your help to make it better.
+
+1. **Fork** the repository.
+2. **Create** a new feature branch.
+3. **Commit** your changes.
+4. **Push** to the branch.
+5. **Open** a Pull Request.
+
+Please see our [Technical Documentation](TECHNICAL_DOC.md) for more details on the architecture and how to get started with development.
 
 ## 📄 License
 
