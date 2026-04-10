@@ -37,7 +37,13 @@
 *   **Detection Overlays**: Visual bounding boxes highlight exactly where the AI "looked" to find the Vendor Name, Date, and Amount.
 *   **Feedback Loop**: Users can click the "Zap" icon next to any field to provide feedback, ensuring the model learns from human expertise over time.
 
-## 7. Usage Tutorial (Onboarding)
+## 7. Document Blueprints & Automated Validation
+![Blueprint Placeholder](https://picsum.photos/seed/blueprint/800/400)
+*   **Schema Builder**: Define strict extraction schemas for different document types (Invoices, Contracts, IDs).
+*   **Automated Logic Checks**: Set custom validation rules (Regex, Numeric Range, Required) that automatically flag documents failing your business logic.
+*   **Predictability**: Ensures the AI always returns data in the exact structure your downstream systems expect.
+
+## 8. Usage Tutorial (Onboarding)
 ![Tutorial Placeholder](https://picsum.photos/seed/tutorial/800/400)
 *   **Simplified Onboarding**: A dedicated sidebar module that explains the app's features in simple, non-technical language.
 *   **Step-by-Step Guide**: Helps users understand the Upload -> AI Magic -> Validate workflow in seconds.

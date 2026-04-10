@@ -4,6 +4,8 @@ DocManager is a production-ready Single Page Application (SPA) designed for auto
 
 ## 🚀 Features
 
+- **Document Blueprints (Schema Builder)**: Define strict schemas for specific document types, ensuring the AI extracts exactly what you need with predictable structure.
+- **Automated Logic Checks**: Implement custom validation rules (Required, Min Length, Numeric Range, Regex) that automatically flag documents failing business logic.
 - **Dynamic AI Extraction**: Automatically classifies any document type (Invoices, Contracts, IDs, etc.) and extracts all meaningful fields without pre-defined templates.
 - **AI Fraud Detection**: Inspects documents for signs of digital tampering, inconsistent fonts, and artifacts using Gemini's vision capabilities.
 - **PII Redaction Engine**: Automatically identifies sensitive data (ID Numbers, Account Details) and allows for role-based masking.
@@ -42,11 +44,12 @@ DocManager is a production-ready Single Page Application (SPA) designed for auto
 
 ## 📖 Usage
 
-1. **Usage Tutorial**: Check the "Usage Tutorial" tab in the sidebar for a simple, step-by-step guide on how to use the system.
-2. **Dashboard**: View system-wide metrics and recent activity.
-2. **Upload**: Drag and drop any document. The AI will classify it and extract data in seconds.
-3. **Validate**: Review the extracted fields side-by-side with the document preview.
-4. **Audit**: Track every modification in the Audit Trails tab.
+1. **Document Blueprints**: Go to the "Blueprints" tab to define a schema for your documents. This ensures the AI knows exactly what fields to look for.
+2. **Usage Tutorial**: Check the "Usage Tutorial" tab in the sidebar for a simple, step-by-step guide on how to use the system.
+3. **Dashboard**: View system-wide metrics and recent activity.
+4. **Upload**: Select a blueprint (optional) and upload your document. The AI will enforce your schema and run validation rules.
+5. **Validate**: Review the extracted fields and "Automated Logic Checks" side-by-side with the document preview.
+6. **Audit**: Track every modification in the Audit Trails tab.
 
 ## 📄 License
 

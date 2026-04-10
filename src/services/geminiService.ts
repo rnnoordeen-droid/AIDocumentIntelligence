@@ -3,7 +3,13 @@ import { ExtractedData } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
-export async function parseDocument(base64Data: string, mimeType: string): Promise<ExtractedData> {
+export async function parseDocument(base64Data: string, mimeType: string, schema?: any): Promise<ExtractedData> {
+  const schemaInstruction = schema 
+    ? `\nSTRICT SCHEMA ENFORCEMENT: You MUST extract the following fields as defined:
+${JSON.stringify(schema, null, 2)}
+Only extract these fields. If a field is not found, return null for it.`
+    : "";
+
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: [
@@ -18,7 +24,7 @@ export async function parseDocument(base64Data: string, mimeType: string): Promi
           {
             text: `Analyze this document and perform the following:
 1. Classify the document type (e.g., Invoice, Bill of Lading, Contract, ID, etc.).
-2. Extract ALL meaningful data fields found in the document.
+2. Extract ALL meaningful data fields found in the document.${schemaInstruction}
 3. Provide a brief summary of the document's purpose.
 4. Assign a confidence score (0-1) for the extraction overall.
 5. Assign a confidence score (0-1) for EACH extracted field.

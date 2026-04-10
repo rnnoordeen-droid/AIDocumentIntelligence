@@ -17,6 +17,7 @@ Traditional OCR (Optical Character Recognition) is rigid. It breaks when a vendo
 **[The Solution: DocManager]**
 DocManager isn't just a scanner; it's an **Enterprise Document Intelligence** platform designed for the rigorous demands of modern business sectors.
 By leveraging **Google’s Gemini AI**, the system:
+✅ **Document Blueprints**: Define strict schemas and automated logic checks for enterprise-grade predictability.
 ✅ **Classifies** documents dynamically (no templates needed).
 ✅ **Extracts** complex fields with confidence scoring.
 ✅ **Detects Fraud**: Identifies digital tampering and artifacts automatically.

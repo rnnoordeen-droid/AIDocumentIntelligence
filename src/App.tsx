@@ -37,7 +37,12 @@ import {
   Info,
   Lightbulb,
   BookOpen,
-  MessageSquare
+  MessageSquare,
+  FileCode,
+  Plus,
+  Trash2,
+  Edit3,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
@@ -66,7 +71,15 @@ import {
 import { Label } from '@/components/ui/label';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
-import { SCFDocument, DocumentStatus, ExtractedData, AuditLog, UserProfile } from './types';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from '@/components/ui/select';
+import { BlueprintModal } from './components/BlueprintModal';
+import { SCFDocument, DocumentStatus, ExtractedData, AuditLog, UserProfile, DocumentBlueprint, ValidationRule } from './types';
 import { parseDocument } from './services/geminiService';
 import { auth, db, signInWithGoogle, logout, handleFirestoreError, OperationType } from './firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
@@ -80,7 +93,8 @@ import {
   updateDoc, 
   addDoc,
   serverTimestamp,
-  getDoc
+  getDoc,
+  deleteDoc
 } from 'firebase/firestore';
 
 export default function App() {
@@ -98,6 +112,10 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRedactionEnabled, setIsRedactionEnabled] = useState(true);
   const [webhookUrl, setWebhookUrl] = useState('');
+  const [blueprints, setBlueprints] = useState<DocumentBlueprint[]>([]);
+  const [isBlueprintModalOpen, setIsBlueprintModalOpen] = useState(false);
+  const [selectedBlueprint, setSelectedBlueprint] = useState<DocumentBlueprint | null>(null);
+  const [uploadBlueprintId, setUploadBlueprintId] = useState<string>('none');
   const [complianceScore, setComplianceScore] = useState(0);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -182,10 +200,23 @@ export default function App() {
       console.warn("User list access restricted to admins");
     });
 
+    // Blueprints Listener
+    const blueprintsQuery = query(collection(db, 'blueprints'), orderBy('createdAt', 'desc'));
+    const unsubscribeBlueprints = onSnapshot(blueprintsQuery, (snapshot) => {
+      const blueprintsData = snapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id,
+      })) as DocumentBlueprint[];
+      setBlueprints(blueprintsData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'blueprints');
+    });
+
     return () => {
       unsubscribeDocs();
       unsubscribeLogs();
       unsubscribeUsers();
+      unsubscribeBlueprints();
     };
   }, [isAuthReady, user]);
 
@@ -278,8 +309,27 @@ export default function App() {
       reader.onload = async () => {
         const fullBase64 = reader.result as string;
         const base64Data = fullBase64.split(',')[1];
-        const extractedData = await parseDocument(base64Data, file.type);
         
+        const blueprint = uploadBlueprintId !== 'none' ? blueprints.find(b => b.id === uploadBlueprintId) : undefined;
+        const schema = blueprint ? {
+          documentType: blueprint.documentType,
+          fields: blueprint.fields.reduce((acc, f) => ({ ...acc, [f.name]: f.type }), {})
+        } : undefined;
+
+        const extractedData = await parseDocument(base64Data, file.type, schema);
+        
+        let status: DocumentStatus = 'pending';
+        
+        // Run validation rules if blueprint exists
+        if (blueprint) {
+          extractedData.validationResults = validateDataAgainstBlueprint(extractedData.fields, blueprint);
+          const hasFailedRules = extractedData.validationResults.some(r => !r.passed);
+          if (hasFailedRules) {
+            status = 'flagged';
+            toast.warning(`Validation failed for ${file.name}. Document flagged for review.`);
+          }
+        }
+
         const docId = `doc-${Date.now()}`;
         const newDoc: Omit<SCFDocument, 'auditTrail'> = {
           id: docId,
@@ -287,7 +337,7 @@ export default function App() {
           fileUrl: '', // In a real app, upload to storage first
           base64Content: fullBase64,
           fileType: extractedData.documentType || (file.type.includes('pdf') ? 'PDF' : 'Image'),
-          status: 'pending',
+          status,
           extractedData,
           uploadDate: new Date().toISOString(),
           uploadedBy: user.email || 'unknown',
@@ -318,6 +368,77 @@ export default function App() {
       toast.error("Failed to parse document");
       setIsParsing(false);
     }
+  };
+
+  const handleDeleteBlueprint = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'blueprints', id));
+      toast.success("Blueprint deleted successfully");
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `blueprints/${id}`);
+    }
+  };
+
+  const handleSaveBlueprint = async (blueprintData: Partial<DocumentBlueprint>) => {
+    try {
+      const id = blueprintData.id || `bp-${Date.now()}`;
+      const newBlueprint = {
+        id,
+        name: blueprintData.name || '',
+        description: blueprintData.description || '',
+        documentType: blueprintData.documentType || 'Invoice',
+        fields: blueprintData.fields || [],
+        rules: blueprintData.rules || [],
+        createdAt: blueprintData.createdAt || new Date().toISOString(),
+      };
+      
+      // Remove any undefined fields just in case
+      Object.keys(newBlueprint).forEach(key => {
+        if ((newBlueprint as any)[key] === undefined) {
+          delete (newBlueprint as any)[key];
+        }
+      });
+
+      await setDoc(doc(db, 'blueprints', id), newBlueprint);
+      setIsBlueprintModalOpen(false);
+      toast.success(blueprintData.id ? "Blueprint updated" : "Blueprint created");
+    } catch (err) {
+      console.error("Save blueprint error:", err);
+      handleFirestoreError(err, OperationType.WRITE, 'blueprints');
+    }
+  };
+
+  const validateDataAgainstBlueprint = (data: Record<string, any>, blueprint: DocumentBlueprint) => {
+    const results: { ruleId: string; passed: boolean; message: string }[] = [];
+    
+    blueprint.rules.forEach(rule => {
+      const value = data[rule.field];
+      let passed = true;
+      
+      switch (rule.type) {
+        case 'required':
+          passed = value !== undefined && value !== null && value !== '';
+          break;
+        case 'min_length':
+          passed = String(value || '').length >= (rule.value || 0);
+          break;
+        case 'numeric_range':
+          const num = Number(value);
+          passed = !isNaN(num) && num >= (rule.value?.min || 0) && num <= (rule.value?.max || Infinity);
+          break;
+        case 'regex':
+          passed = new RegExp(rule.value || '').test(String(value || ''));
+          break;
+      }
+      
+      results.push({
+        ruleId: rule.id,
+        passed,
+        message: passed ? 'Passed' : rule.message
+      });
+    });
+    
+    return results;
   };
 
   const handleValidate = async (docObj: SCFDocument) => {
@@ -445,6 +566,8 @@ export default function App() {
         return <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100"><Clock className="w-3 h-3 mr-1" /> Processing</Badge>;
       case 'rejected':
         return <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100"><AlertCircle className="w-3 h-3 mr-1" /> Rejected</Badge>;
+      case 'flagged':
+        return <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100"><ShieldAlert className="w-3 h-3 mr-1" /> Flagged</Badge>;
       default:
         return <Badge className="bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-100"><Clock className="w-3 h-3 mr-1" /> Pending</Badge>;
     }
@@ -481,6 +604,12 @@ export default function App() {
             label="Audit Logs" 
             active={activeTab === 'audit'} 
             onClick={() => setActiveTab('audit')} 
+          />
+          <NavItem 
+            icon={<FileCode size={20} />} 
+            label="Blueprints" 
+            active={activeTab === 'blueprints'} 
+            onClick={() => setActiveTab('blueprints')} 
           />
           <NavItem 
             icon={<Globe size={20} />} 
@@ -858,11 +987,27 @@ export default function App() {
                       {previewUrl ? (
                         <>
                           {selectedDoc.base64Content?.includes('application/pdf') ? (
-                            <iframe 
-                              src={previewUrl} 
-                              className="w-full h-full border-none"
-                              title="Document Preview"
-                            />
+                            <div className="relative w-full h-full">
+                              <iframe 
+                                src={previewUrl} 
+                                className="w-full h-full border-none"
+                                title="Document Preview"
+                              />
+                              {/* Visual Inspection Overlays for PDF */}
+                              <div className="absolute inset-0 pointer-events-none">
+                                <motion.div 
+                                  initial={{ opacity: 0 }}
+                                  animate={{ opacity: 0.3 }}
+                                  className="absolute top-[15%] left-[10%] w-[40%] h-[10%] border-2 border-brand-accent bg-brand-accent/10 rounded"
+                                />
+                                <motion.div 
+                                  initial={{ opacity: 0 }}
+                                  animate={{ opacity: 0.3 }}
+                                  transition={{ delay: 0.2 }}
+                                  className="absolute top-[30%] left-[55%] w-[30%] h-[8%] border-2 border-indigo-500 bg-indigo-500/10 rounded"
+                                />
+                              </div>
+                            </div>
                           ) : (
                             <div className="relative h-fit">
                               <img 
@@ -872,28 +1017,28 @@ export default function App() {
                                 referrerPolicy="no-referrer"
                               />
                               {/* Landing AI Inspired Visual Inspection Overlays */}
-                              <>
+                              <div className="absolute inset-0 pointer-events-none">
                                 <motion.div 
                                   initial={{ opacity: 0 }}
-                                  animate={{ opacity: 0.4 }}
-                                  className="absolute top-[20%] left-[15%] w-[30%] h-[5%] border-2 border-brand-accent bg-brand-accent/20 rounded cursor-help"
+                                  animate={{ opacity: 0.5 }}
+                                  className="absolute top-[20%] left-[15%] w-[30%] h-[5%] border-2 border-brand-accent bg-brand-accent/20 rounded"
                                   title="AI Detected: Vendor Name"
                                 />
                                 <motion.div 
                                   initial={{ opacity: 0 }}
-                                  animate={{ opacity: 0.4 }}
+                                  animate={{ opacity: 0.5 }}
                                   transition={{ delay: 0.2 }}
-                                  className="absolute top-[28%] left-[60%] w-[25%] h-[5%] border-2 border-indigo-500 bg-indigo-500/20 rounded cursor-help"
+                                  className="absolute top-[28%] left-[60%] w-[25%] h-[5%] border-2 border-indigo-500 bg-indigo-500/20 rounded"
                                   title="AI Detected: Invoice Date"
                                 />
                                 <motion.div 
                                   initial={{ opacity: 0 }}
-                                  animate={{ opacity: 0.4 }}
+                                  animate={{ opacity: 0.5 }}
                                   transition={{ delay: 0.4 }}
-                                  className="absolute bottom-[15%] right-[10%] w-[20%] h-[8%] border-2 border-green-500 bg-green-500/20 rounded cursor-help"
+                                  className="absolute bottom-[15%] right-[10%] w-[20%] h-[8%] border-2 border-green-500 bg-green-500/20 rounded"
                                   title="AI Detected: Total Amount"
                                 />
-                              </>
+                              </div>
                             </div>
                           )}
                         </>
@@ -936,6 +1081,25 @@ export default function App() {
                       </div>
                     </div>
                     <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                      {selectedDoc.extractedData?.validationResults && selectedDoc.extractedData.validationResults.length > 0 && (
+                        <div className="space-y-3">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400">Automated Logic Checks</h4>
+                          <div className="space-y-2">
+                            {selectedDoc.extractedData.validationResults.map((res, idx) => (
+                              <div key={idx} className={`p-3 rounded-lg border flex items-center gap-3 ${
+                                res.passed ? 'bg-green-50 border-green-100 text-green-700' : 'bg-amber-50 border-amber-100 text-amber-700'
+                              }`}>
+                                {res.passed ? <Check size={16} /> : <AlertCircle size={16} />}
+                                <div className="flex-1">
+                                  <p className="text-xs font-bold">{res.passed ? 'Rule Passed' : 'Rule Failed'}</p>
+                                  {!res.passed && <p className="text-[10px] opacity-80">{res.message}</p>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {selectedDoc.extractedData?.fraudAnalysis?.isSuspicious && (
                         <div className="p-4 bg-red-50 rounded-lg border border-red-100 flex gap-3">
                           <ShieldAlert className="text-red-600 shrink-0" size={20} />
@@ -1068,6 +1232,88 @@ export default function App() {
                       })}
                     </div>
                   </div>
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'blueprints' && !isValidatingView && (
+              <motion.div
+                key="blueprints"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-8 p-8"
+              >
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold text-brand-primary">Document Blueprints</h2>
+                    <p className="text-gray-500">Define structured schemas and validation rules for specific document types.</p>
+                  </div>
+                  <Button 
+                    className="bg-brand-accent hover:bg-brand-accent/90 text-white gap-2"
+                    onClick={() => {
+                      setSelectedBlueprint(null);
+                      setIsBlueprintModalOpen(true);
+                    }}
+                  >
+                    <Plus size={18} />
+                    Create Blueprint
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {blueprints.length === 0 ? (
+                    <Card className="col-span-full p-12 text-center border-dashed">
+                      <FileCode size={48} className="mx-auto text-gray-300 mb-4" />
+                      <h3 className="text-lg font-medium text-gray-500">No Blueprints Defined</h3>
+                      <p className="text-sm text-gray-400 mt-2">Create a blueprint to enforce strict data extraction and validation rules.</p>
+                    </Card>
+                  ) : (
+                    blueprints.map(bp => (
+                      <Card key={bp.id} className="group hover:shadow-md transition-shadow">
+                        <CardHeader className="pb-2">
+                          <div className="flex justify-between items-start">
+                            <Badge variant="outline" className="text-[10px] uppercase font-bold text-brand-accent border-brand-accent/20">
+                              {bp.documentType}
+                            </Badge>
+                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-brand-accent" onClick={() => {
+                                setSelectedBlueprint(bp);
+                                setIsBlueprintModalOpen(true);
+                              }}>
+                                <Edit3 size={14} />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-red-500" onClick={() => handleDeleteBlueprint(bp.id)}>
+                                <Trash2 size={14} />
+                              </Button>
+                            </div>
+                          </div>
+                          <CardTitle className="text-lg mt-2">{bp.name}</CardTitle>
+                          <CardDescription className="text-xs line-clamp-2">{bp.description}</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-3">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-400">Fields Defined</span>
+                              <span className="font-bold">{bp.fields.length}</span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-400">Validation Rules</span>
+                              <span className="font-bold">{bp.rules.length}</span>
+                            </div>
+                            <div className="pt-3 border-t flex flex-wrap gap-1">
+                              {bp.fields.slice(0, 3).map(f => (
+                                <Badge key={f.name} variant="secondary" className="text-[9px] px-1.5 py-0">
+                                  {f.name}
+                                </Badge>
+                              ))}
+                              {bp.fields.length > 3 && <span className="text-[9px] text-gray-400">+{bp.fields.length - 3} more</span>}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
                 </div>
               </motion.div>
             )}
@@ -1396,24 +1642,44 @@ export default function App() {
               Upload an invoice or bill of lading for AI-powered parsing.
             </DialogDescription>
           </DialogHeader>
-          <div 
-            className="border-2 border-dashed border-gray-200 rounded-xl p-12 flex flex-col items-center justify-center gap-4 hover:border-brand-accent hover:bg-brand-accent/5 transition-all cursor-pointer group"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center group-hover:bg-brand-accent/10 transition-colors">
-              <FileUp className="text-gray-400 group-hover:text-brand-accent" />
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase text-gray-400">Select Document Blueprint (Optional)</Label>
+              <Select value={uploadBlueprintId} onValueChange={setUploadBlueprintId}>
+                <SelectTrigger className="w-full bg-gray-50 border-none">
+                  <SelectValue placeholder="No Blueprint (Dynamic Extraction)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Blueprint (Dynamic Extraction)</SelectItem>
+                  {blueprints.map(bp => (
+                    <SelectItem key={bp.id} value={bp.id}>{bp.name} ({bp.documentType})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-gray-400 italic">
+                Using a blueprint ensures strict schema enforcement and automated logic checks.
+              </p>
             </div>
-            <div className="text-center">
-              <p className="text-sm font-medium">Click to upload or drag and drop</p>
-              <p className="text-xs text-gray-400 mt-1">PDF, PNG, or JPG (max 10MB)</p>
+
+            <div 
+              className="border-2 border-dashed border-gray-200 rounded-xl p-12 flex flex-col items-center justify-center gap-4 hover:border-brand-accent hover:bg-brand-accent/5 transition-all cursor-pointer group"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center group-hover:bg-brand-accent/10 transition-colors">
+                <FileUp className="text-gray-400 group-hover:text-brand-accent" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-medium">Click to upload or drag and drop</p>
+                <p className="text-xs text-gray-400 mt-1">PDF, PNG, or JPG (max 10MB)</p>
+              </div>
+              <input 
+                type="file" 
+                className="hidden" 
+                ref={fileInputRef} 
+                onChange={handleFileUpload}
+                accept=".pdf,.png,.jpg,.jpeg"
+              />
             </div>
-            <input 
-              type="file" 
-              className="hidden" 
-              ref={fileInputRef} 
-              onChange={handleFileUpload}
-              accept=".pdf,.png,.jpg,.jpeg"
-            />
           </div>
           <DialogFooter className="sm:justify-start">
             <Button type="button" variant="secondary" onClick={() => setIsUploadOpen(false)}>
@@ -1424,6 +1690,13 @@ export default function App() {
       </Dialog>
 
       {/* Validation Dialog (HITL) - REMOVED IN FAVOR OF FULL SCREEN VIEW */}
+      
+      <BlueprintModal 
+        isOpen={isBlueprintModalOpen}
+        onClose={() => setIsBlueprintModalOpen(false)}
+        onSave={handleSaveBlueprint}
+        initialData={selectedBlueprint}
+      />
     </div>
   );
 }

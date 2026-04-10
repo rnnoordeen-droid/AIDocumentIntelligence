@@ -1,4 +1,27 @@
-export type DocumentStatus = 'pending' | 'processing' | 'validated' | 'rejected';
+export type DocumentStatus = 'pending' | 'processing' | 'validated' | 'rejected' | 'flagged';
+
+export interface ValidationRule {
+  id: string;
+  field: string;
+  type: 'required' | 'min_length' | 'max_length' | 'regex' | 'numeric_range' | 'custom';
+  value?: any;
+  message: string;
+}
+
+export interface DocumentBlueprint {
+  id: string;
+  name: string;
+  description: string;
+  documentType: string;
+  fields: {
+    name: string;
+    type: 'string' | 'number' | 'date' | 'boolean' | 'array';
+    description: string;
+    required: boolean;
+  }[];
+  rules: ValidationRule[];
+  createdAt: string;
+}
 
 export interface ExtractedData {
   documentType?: string;
@@ -12,6 +35,11 @@ export interface ExtractedData {
     confidence: number;
   };
   piiFields?: string[];
+  validationResults?: {
+    ruleId: string;
+    passed: boolean;
+    message: string;
+  }[];
 }
 
 export interface SCFDocument {
