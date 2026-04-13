@@ -97,5 +97,3 @@ This section is designed to help developers prepare for technical discussions re
 - *"The architecture is **Event-Driven**, triggering side-effects like audit logging and webhook dispatching upon validation."*
 - *"We solved the **AI Trust Problem** by designing a robust Human-in-the-Loop validation gate."*
 
----
-*Built with ❤️ for the Open Source AI Community.*
