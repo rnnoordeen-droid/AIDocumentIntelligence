@@ -83,4 +83,4 @@ DocManager solves a real-world business problem: **Data Accuracy at Scale**. It 
 
 ---
 **Contact Information:**
-[Your Name] | [Your Email] | [Your LinkedIn]
+Roxy Noordeen | rn.noordeen@gmail.com | [[Your LinkedIn]](https://www.linkedin.com/in/roxynoordeen/)
