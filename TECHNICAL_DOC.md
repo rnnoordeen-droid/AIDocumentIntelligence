@@ -55,6 +55,25 @@ DocManager utilizes **Cloud Firestore** for its reactive programming model.
 - **RBAC**: Role-Based Access Control is enforced at the database layer via Firestore Security Rules.
 - **PII Redaction**: A conditional masking layer identifies and hides sensitive data based on AI-identified PII fields.
 
+## 🚀 Advanced Capabilities: RAG Implementation (DocBrain)
+
+DocManager features **DocBrain**, a sophisticated **Retrieval-Augmented Generation (RAG)** engine that allows users to query their entire document library using natural language.
+
+### Core Architecture:
+1. **Metadata-Direct Retrieval**: Instead of traditional vector database chunking, we leverage the **Structured Extraction** (JSON data) stored in Firestore. This ensures 100% accuracy in the "retrieval" phase as we filter based on objective metadata (date, vendor, type).
+2. **Long-Context Reasoning**: We utilize **Gemini 1.5 Flash 2.0**, which possesses a 2M token context window. This allows us to feed the structured summaries of up to 100 relevant documents into a single prompt for global library reasoning.
+3. **Query Flow**:
+    - *Intent Detection*: AI classifies if the user is asking for a single-doc summary, a multi-doc comparison, or a quantified report.
+    - *Augmentation*: Prompt is injected with the document's JSON data, file metadata, and chat history.
+    - *Grounded Generation*: Gemini generates answers with mandatory citations (e.g., `[doc-123]`) and optional `chartData` for visual reporting.
+
+### Reporting Engine:
+- **Visual Intelligence**: If a trend is detected, DocBrain outputs a structured JSON object specifying chart type (Bar, Line, Pie), axis keys, and data points.
+- **Dynamic Rendering**: The frontend dynamically renders these insights using `Recharts`, allowing for instant conversational analytics.
+
+### Future Roadmap: Vector Search
+For scaling beyond thousands of documents, the platform is prepared to integrate with **Vertex AI Vector Search**, enabling semantic retrieval based on the *meaning* of document text, not just structured fields.
+
 ## 📂 Project Structure
 
 ```text
@@ -92,8 +111,13 @@ This section is designed to help developers prepare for technical discussions re
 ### Q: How does the visual localization remain responsive?
 **A:** By using normalized coordinates (0-100) instead of pixel values, the overlays are relative to the document container. CSS absolute positioning with percentage values ensures they stay aligned regardless of screen size.
 
+### Q: Why is RAG (Retrieval-Augmented Generation) significant for a Doc Intelligence platform?
+**A:** RAG turns a static repository into a "Conversational Intelligence" hub. Instead of manually searching through PDFs, users can ask high-level questions across the entire dataset. By combining Firestore's metadata filtering with Gemini's long-context window, we provide highly accurate, grounded answers that eliminate the "needle in a haystack" problem.
+
 ### 🚀 Interview "Power Phrases":
 - *"We implemented a **Data-Centric AI feedback loop** to improve extraction accuracy over time."*
 - *"The architecture is **Event-Driven**, triggering side-effects like audit logging and webhook dispatching upon validation."*
 - *"We solved the **AI Trust Problem** by designing a robust Human-in-the-Loop validation gate."*
 
+---
+*Built with ❤️ for the Open Source AI Community.*

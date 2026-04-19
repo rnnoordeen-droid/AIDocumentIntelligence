@@ -102,7 +102,7 @@ export function BlueprintModal({ isOpen, onClose, onSave, initialData }: Bluepri
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] flex flex-col p-0 overflow-hidden">
+      <DialogContent className="sm:max-w-[700px] h-[90vh] flex flex-col p-0 overflow-hidden">
         <DialogHeader className="p-6 pb-0">
           <DialogTitle>{initialData ? 'Edit Blueprint' : 'Create Document Blueprint'}</DialogTitle>
           <DialogDescription>
@@ -110,7 +110,7 @@ export function BlueprintModal({ isOpen, onClose, onSave, initialData }: Bluepri
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 p-6">
+        <div className="flex-1 overflow-y-auto p-6">
           <div className="space-y-8">
             {/* Basic Info */}
             <div className="grid grid-cols-2 gap-4">
@@ -243,7 +243,7 @@ export function BlueprintModal({ isOpen, onClose, onSave, initialData }: Bluepri
               </div>
             </div>
           </div>
-        </ScrollArea>
+        </div>
 
         <DialogFooter className="p-6 border-t bg-gray-50">
           <Button variant="outline" onClick={onClose}>Cancel</Button>

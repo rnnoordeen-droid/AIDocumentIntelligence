@@ -32,6 +32,7 @@ import {
   Lock,
   Unlock,
   Zap,
+  RefreshCcw,
   ChevronLeft,
   HelpCircle,
   Info,
@@ -44,11 +45,13 @@ import {
   Edit3,
   Check,
   Terminal,
-  Code
+  Code,
+  Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { IntelligenceView } from './components/IntelligenceView';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -106,6 +109,10 @@ export default function App() {
   const [usersList, setUsersList] = useState<UserProfile[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  
+  useEffect(() => {
+    (window as any).setIsUploadOpen = setIsUploadOpen;
+  }, []);
   const [isValidatingView, setIsValidatingView] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<SCFDocument | null>(null);
   const [isParsing, setIsParsing] = useState(false);
@@ -327,9 +334,16 @@ export default function App() {
         if (blueprint) {
           extractedData.validationResults = validateDataAgainstBlueprint(extractedData.fields, blueprint);
           const hasFailedRules = extractedData.validationResults.some(r => !r.passed);
+          
           if (hasFailedRules) {
             status = 'flagged';
-            toast.warning(`Validation failed for ${file.name}. Document flagged for review.`);
+            const failedCount = extractedData.validationResults.filter(r => !r.passed).length;
+            
+            if ((extractedData.confidenceScore || 0) >= 0.95) {
+              toast.warning(`${file.name}: AI is highly confident, but ${failedCount} validation rule(s) failed. Flagged for review.`);
+            } else {
+              toast.warning(`Validation failed for ${file.name}. Document flagged for review.`);
+            }
           }
         }
 
@@ -597,6 +611,12 @@ export default function App() {
             onClick={() => setActiveTab('dashboard')} 
           />
           <NavItem 
+            icon={<Sparkles size={20} />} 
+            label="Library Intelligence" 
+            active={activeTab === 'intelligence'} 
+            onClick={() => setActiveTab('intelligence')} 
+          />
+          <NavItem 
             icon={<FileText size={20} />} 
             label="Documents" 
             active={activeTab === 'documents'} 
@@ -666,17 +686,30 @@ export default function App() {
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <header className="h-16 bg-white border-b flex items-center justify-between px-8">
-          <div className="flex items-center gap-4 flex-1 max-w-xl">
-            <div className="relative w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <Input 
-                placeholder="Search documents, vendors, or invoice numbers..." 
-                className="pl-10 bg-gray-50 border-none focus-visible:ring-brand-accent"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-          </div>
+      <div className="relative w-full max-w-2xl flex items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+          <Input 
+            placeholder="Search documents, vendors, or invoice numbers..." 
+            className="pl-10 bg-gray-50 border-none focus-visible:ring-brand-accent w-full h-10"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button 
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-brand-accent transition-colors"
+            >
+              <RefreshCcw size={14} />
+            </button>
+          )}
+        </div>
+        {searchQuery && (
+          <Badge variant="outline" className="bg-brand-accent/5 text-brand-accent border-brand-accent/20 shrink-0">
+            {filteredDocs.length} {filteredDocs.length === 1 ? 'result' : 'results'}
+          </Badge>
+        )}
+      </div>
           
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" className="relative">
@@ -695,99 +728,145 @@ export default function App() {
         </header>
 
         {/* Content Area */}
-        <ScrollArea className={`flex-1 ${isValidatingView ? 'p-0' : 'p-8'}`}>
-          <AnimatePresence mode="wait">
-            {activeTab === 'dashboard' && !isValidatingView && (
-              <motion.div
-                key="dashboard"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="space-y-8 p-8"
-              >
-                <div className="flex justify-between items-end">
-                  <div>
-                    <h2 className="text-2xl font-bold text-brand-primary">Welcome back, {user.displayName?.split(' ')[0] || 'User'}</h2>
-                    <p className="text-gray-500">Here's what's happening with your documents today.</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-gray-400 uppercase tracking-wider">System Status</p>
-                    <div className="flex items-center gap-2 text-green-600 font-medium">
-                      <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse"></div>
-                      AI Engine Online
-                    </div>
-                  </div>
-                </div>
-
-                {/* Stats Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <StatCard title="Total Documents" value={documents.length.toString()} icon={<FileText className="text-blue-600" />} change="+12% from last month" />
-                  <StatCard title="Pending Validation" value={documents.filter(d => d.status === 'pending').length.toString()} icon={<Clock className="text-amber-600" />} change="Requires attention" />
-                  <StatCard title="Compliance Score" value={`${complianceScore}%`} icon={<ShieldCheck className="text-green-600" />} change="Auto-pass rate" />
-                  <StatCard title="AI Accuracy" value="98.4%" icon={<Zap className="text-indigo-600" />} change="Based on last 500 docs" />
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                  <Card className="lg:col-span-2">
-                    <CardHeader>
-                      <CardTitle>Recent Documents</CardTitle>
-                      <CardDescription>Latest uploads and their current processing status.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Document</TableHead>
-                            <TableHead>Type</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Date</TableHead>
-                            <TableHead className="text-right">Action</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {documents.slice(0, 5).map((doc) => (
-                            <TableRow key={doc.id}>
-                              <TableCell className="font-medium">{doc.fileName}</TableCell>
-                              <TableCell>{doc.fileType}</TableCell>
-                              <TableCell>{getStatusBadge(doc.status)}</TableCell>
-                              <TableCell>{new Date(doc.uploadDate).toLocaleDateString()}</TableCell>
-                              <TableCell className="text-right">
-                                <Button variant="ghost" size="sm" onClick={() => { setSelectedDoc(doc); setIsValidatingView(true); }}>View</Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Audit Activity</CardTitle>
-                      <CardDescription>Recent system and user actions.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-6">
-                        {auditLogs.slice(0, 4).map((log) => (
-                          <div key={log.id} className="flex gap-3">
-                            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                              <User size={14} className="text-gray-500" />
-                            </div>
-                            <div>
-                              <p className="text-xs font-medium text-brand-primary">
-                                <span className="font-bold">{log.userName}</span> {log.details.toLowerCase()}
-                              </p>
-                              <p className="text-[10px] text-gray-400 mt-1">{new Date(log.timestamp).toLocaleString()}</p>
-                            </div>
-                          </div>
-                        ))}
+        <div className="flex-1 flex flex-col overflow-hidden relative">
+          {activeTab === 'intelligence' && !isValidatingView ? (
+            <div className="absolute inset-0 bg-brand-surface">
+              <IntelligenceView 
+                documents={documents} 
+                onViewDoc={(doc) => {
+                  setSelectedDoc(doc);
+                  setIsValidatingView(true);
+                }}
+              />
+            </div>
+          ) : (
+            <ScrollArea className={`flex-1 ${isValidatingView ? 'p-0' : 'p-8'}`}>
+              <AnimatePresence mode="wait">
+                {activeTab === 'dashboard' && !isValidatingView && (
+                  <motion.div
+                    key="dashboard"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    className="space-y-8 p-8"
+                  >
+                    <div className="flex justify-between items-end">
+                      <div>
+                        <h2 className="text-2xl font-bold text-brand-primary">Welcome back, {user.displayName?.split(' ')[0] || 'User'}</h2>
+                        <p className="text-gray-500">Here's what's happening with your documents today.</p>
                       </div>
-                      <Button variant="outline" className="w-full mt-6 text-xs" onClick={() => setActiveTab('audit')}>View Full Audit Trail</Button>
-                    </CardContent>
-                  </Card>
-                </div>
-              </motion.div>
-            )}
+                      <div className="text-right">
+                        <p className="text-sm font-medium text-gray-400 uppercase tracking-wider">System Status</p>
+                        <div className="flex items-center gap-2 text-green-600 font-medium">
+                          <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse"></div>
+                          AI Engine Online
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                      <StatCard title="Total Documents" value={documents.length.toString()} icon={<FileText className="text-blue-600" />} change="+12% from last month" />
+                      <StatCard title="Pending Validation" value={documents.filter(d => d.status === 'pending').length.toString()} icon={<Clock className="text-amber-600" />} change="Requires attention" />
+                      <StatCard title="Compliance Score" value={`${complianceScore}%`} icon={<ShieldCheck className="text-green-600" />} change="Auto-pass rate" />
+                      <StatCard title="AI Accuracy" value="98.4%" icon={<Zap className="text-indigo-600" />} change="Based on last 500 docs" />
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                      <Card className="lg:col-span-2">
+                        <CardHeader>
+                          <CardTitle>Recent Documents</CardTitle>
+                          <CardDescription>Latest uploads matching your current view.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Document</TableHead>
+                                <TableHead>Type</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Date</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {filteredDocs.length === 0 ? (
+                                <TableRow>
+                                  <TableCell colSpan={5} className="text-center py-12 text-gray-400">
+                                    <div className="flex flex-col items-center gap-2">
+                                      <FileText size={32} className="opacity-20" />
+                                      <p>No documents found matching "{searchQuery}"</p>
+                                      <Button variant="link" onClick={() => setSearchQuery('')} className="text-brand-accent">Clear search</Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ) : (
+                                filteredDocs.slice(0, 5).map((doc) => (
+                                  <TableRow key={doc.id}>
+                                    <TableCell className="font-medium">{doc.fileName}</TableCell>
+                                    <TableCell>{doc.extractedData?.documentType || doc.fileType}</TableCell>
+                                    <TableCell>{getStatusBadge(doc.status)}</TableCell>
+                                    <TableCell>{new Date(doc.uploadDate).toLocaleDateString()}</TableCell>
+                                    <TableCell className="text-right">
+                                      <Button variant="ghost" size="sm" onClick={() => { setSelectedDoc(doc); setIsValidatingView(true); }}>View</Button>
+                                    </TableCell>
+                                  </TableRow>
+                                ))
+                              )}
+                            </TableBody>
+                          </Table>
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Audit Activity</CardTitle>
+                          <CardDescription>Recent system and user actions.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-6">
+                            {auditLogs.slice(0, 4).map((log) => (
+                              <div key={log.id} className="flex gap-3">
+                                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                  <User size={14} className="text-gray-500" />
+                                </div>
+                                <div>
+                                  <p className="text-xs font-medium text-brand-primary">
+                                    <span className="font-bold">{log.userName}</span> {log.details.toLowerCase()}
+                                  </p>
+                                  <p className="text-[10px] text-gray-400 mt-1">{new Date(log.timestamp).toLocaleString()}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <Button variant="outline" className="w-full mt-6 text-xs" onClick={() => setActiveTab('audit')}>View Full Audit Trail</Button>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Library Intelligence Feature Card */}
+                    <Card className="bg-brand-primary text-white overflow-hidden border-none shadow-xl relative mt-8">
+                      <div className="absolute top-0 right-0 p-8 opacity-10 rotate-12 scale-150">
+                        <Sparkles size={120} />
+                      </div>
+                      <CardContent className="p-8 relative z-10">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                          <div className="max-w-2xl">
+                            <Badge className="bg-brand-accent text-white border-none mb-4 px-3 py-1">New Feature</Badge>
+                            <h3 className="text-3xl font-bold mb-3">Ask your Library Anything</h3>
+                            <p className="text-white/70 text-lg">Our new DocBrain intelligence engine can now reason across all your documents simultaneously. Detect trends, ask complex questions, and generate reports in seconds.</p>
+                          </div>
+                          <Button 
+                            onClick={() => setActiveTab('intelligence')}
+                            className="bg-white text-brand-primary hover:bg-white/90 px-8 h-12 text-lg font-bold shrink-0 shadow-lg"
+                          >
+                            Try DocBrain now
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                )}
 
             {activeTab === 'documents' && !isValidatingView && (
               <motion.div
@@ -823,45 +902,60 @@ export default function App() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredDocs.map((doc) => (
-                          <TableRow key={doc.id}>
-                            <TableCell className="font-medium">{doc.fileName}</TableCell>
-                            <TableCell>
-                              <Badge variant="secondary" className="capitalize">
-                                {doc.extractedData?.documentType || doc.fileType}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="max-w-xs truncate text-gray-500">
-                              {doc.extractedData?.summary || '---'}
-                            </TableCell>
-                            <TableCell>
-                              {doc.extractedData?.confidenceScore ? (
-                                <div className="flex items-center gap-2">
-                                  <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                    <div 
-                                      className={`h-full rounded-full ${
-                                        doc.extractedData.confidenceScore > 0.8 ? 'bg-green-500' : 
-                                        doc.extractedData.confidenceScore > 0.5 ? 'bg-amber-500' : 'bg-red-500'
-                                      }`}
-                                      style={{ width: `${doc.extractedData.confidenceScore * 100}%` }}
-                                    ></div>
-                                  </div>
-                                  <span className="text-[10px] font-medium">{Math.round(doc.extractedData.confidenceScore * 100)}%</span>
-                                </div>
-                              ) : '---'}
-                            </TableCell>
-                            <TableCell>{getStatusBadge(doc.status)}</TableCell>
-                            <TableCell>{new Date(doc.uploadDate).toLocaleDateString()}</TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex justify-end gap-2">
-                                <Button variant="outline" size="sm" onClick={() => { setSelectedDoc(doc); setIsValidatingView(true); }}>View</Button>
-                                {doc.status === 'pending' && (
-                                  <Button className="bg-brand-accent hover:bg-brand-accent/90 text-white" size="sm" onClick={() => { setSelectedDoc(doc); setIsValidatingView(true); }}>Validate</Button>
-                                )}
+                        {filteredDocs.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center py-20 text-gray-400">
+                              <div className="flex flex-col items-center gap-2">
+                                <Search size={48} className="opacity-10 mb-2" />
+                                <p className="text-lg font-medium">No documents found</p>
+                                <p className="text-sm">We couldn't find any documents matching your search criteria.</p>
+                                <Button variant="outline" onClick={() => setSearchQuery('')} className="mt-4 border-brand-accent text-brand-accent">
+                                  Clear Search Filters
+                                </Button>
                               </div>
                             </TableCell>
                           </TableRow>
-                        ))}
+                        ) : (
+                          filteredDocs.map((doc) => (
+                            <TableRow key={doc.id}>
+                              <TableCell className="font-medium">{doc.fileName}</TableCell>
+                              <TableCell>
+                                <Badge variant="secondary" className="capitalize">
+                                  {doc.extractedData?.documentType || doc.fileType}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="max-w-xs truncate text-gray-500">
+                                {doc.extractedData?.summary || '---'}
+                              </TableCell>
+                              <TableCell>
+                                {doc.extractedData?.confidenceScore ? (
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                      <div 
+                                        className={`h-full rounded-full ${
+                                          doc.extractedData.confidenceScore > 0.8 ? 'bg-green-500' : 
+                                          doc.extractedData.confidenceScore > 0.5 ? 'bg-amber-500' : 'bg-red-500'
+                                        }`}
+                                        style={{ width: `${doc.extractedData.confidenceScore * 100}%` }}
+                                      ></div>
+                                    </div>
+                                    <span className="text-[10px] font-medium">{Math.round(doc.extractedData.confidenceScore * 100)}%</span>
+                                  </div>
+                                ) : '---'}
+                              </TableCell>
+                              <TableCell>{getStatusBadge(doc.status)}</TableCell>
+                              <TableCell>{new Date(doc.uploadDate).toLocaleDateString()}</TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-2">
+                                  <Button variant="outline" size="sm" onClick={() => { setSelectedDoc(doc); setIsValidatingView(true); }}>View</Button>
+                                  {doc.status === 'pending' && (
+                                    <Button className="bg-brand-accent hover:bg-brand-accent/90 text-white" size="sm" onClick={() => { setSelectedDoc(doc); setIsValidatingView(true); }}>Validate</Button>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
                       </TableBody>
                     </Table>
                   </CardContent>
@@ -1161,6 +1255,21 @@ export default function App() {
                         </div>
                       )}
 
+                      {selectedDoc.extractedData?.groundingScore !== undefined && (
+                        <div className={`p-4 rounded-lg border flex gap-3 ${
+                          (selectedDoc.extractedData?.groundingScore || 0) > 0.9 ? 'bg-green-50 border-green-100 text-green-700' : 'bg-amber-50 border-amber-100 text-amber-700'
+                        }`}>
+                          <ShieldCheck className={selectedDoc.extractedData.groundingScore > 0.9 ? 'text-green-600' : 'text-amber-600'} size={20} />
+                          <div>
+                            <h5 className="text-sm font-bold">Document Grounding Score</h5>
+                            <p className="text-xs mt-1">
+                              {Math.round(selectedDoc.extractedData.groundingScore * 100)}% of content is explicitly verified in source text.
+                              {selectedDoc.extractedData.hallucinationRisk! > 0.1 && " Minor hallucination risk detected."}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
                       {selectedDoc.extractedData?.fraudAnalysis?.isSuspicious && (
                         <div className="p-4 bg-red-50 rounded-lg border border-red-100 flex gap-3">
                           <ShieldAlert className="text-red-600 shrink-0" size={20} />
@@ -1192,8 +1301,11 @@ export default function App() {
                         <div className="grid gap-4">
                           {selectedDoc.extractedData?.fields && Object.entries(selectedDoc.extractedData.fields).map(([key, value]) => {
                             if (Array.isArray(value)) return null;
-                            const confidence = selectedDoc.extractedData?.fieldConfidence?.[key] || 1;
-                            const isLowConfidence = confidence < 0.8;
+                            const metrics = selectedDoc.extractedData?.fieldMetrics?.[key];
+                            const confidence = metrics?.confidence ?? (selectedDoc.extractedData?.fieldConfidence?.[key] || 1);
+                            const grounding = metrics?.grounding ?? 1;
+                            const isLowConfidence = confidence < 0.85;
+                            const isDisputed = metrics?.crossCheckResult === 'mismatch';
                             
                             const isPII = selectedDoc.extractedData?.piiFields?.includes(key);
                             const displayValue = isRedactionEnabled && isPII ? '••••••••••••' : String(value);
@@ -1235,8 +1347,8 @@ export default function App() {
                                         onFocus={() => setActiveField(key)}
                                         onBlur={() => setActiveField(null)}
                                         className={`h-9 text-sm focus-visible:ring-brand-accent ${
-                                          isLowConfidence && selectedDoc.status === 'pending' ? 'border-red-300 bg-red-50/30' : ''
-                                        } ${isRedactionEnabled && isPII ? 'bg-gray-50 font-mono text-gray-400' : ''}`}
+                                          isLowConfidence && selectedDoc.status === 'pending' ? 'border-red-400 bg-red-50/50 ring-2 ring-red-100' : ''
+                                        } ${isDisputed ? 'border-amber-400 bg-amber-50' : ''} ${isRedactionEnabled && isPII ? 'bg-gray-50 font-mono text-gray-400' : ''}`}
                                         onChange={(e) => {
                                           if (selectedDoc.extractedData && !(isRedactionEnabled && isPII)) {
                                             selectedDoc.extractedData.fields[key] = e.target.value;
@@ -1255,9 +1367,14 @@ export default function App() {
                                         <Zap size={12} />
                                       </Button>
                                     )}
-                                    {confidence < 1 && (
-                                      <div className={`absolute -right-11 top-2 text-[10px] font-bold ${isLowConfidence ? 'text-red-500' : 'text-gray-400'}`}>
+                                    {isLowConfidence && selectedDoc.status === 'pending' && (
+                                      <div className={`absolute -right-11 top-2 text-[10px] font-bold text-red-500`}>
                                         {Math.round(confidence * 100)}%
+                                      </div>
+                                    )}
+                                    {isDisputed && (
+                                      <div className="absolute -left-6 top-2 text-amber-500" title="Cross-check discrepancy detected">
+                                        <ShieldAlert size={14} />
                                       </div>
                                     )}
                                   </div>
@@ -1839,7 +1956,9 @@ graph TD
             )}
           </AnimatePresence>
         </ScrollArea>
-      </main>
+        )}
+      </div>
+    </main>
 
       {/* Upload Dialog */}
       <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>

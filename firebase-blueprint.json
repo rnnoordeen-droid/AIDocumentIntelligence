@@ -11,7 +11,7 @@
         "fileType": { "type": "string", "description": "Type of document (e.g., Invoice, Bill of Lading)" },
         "status": { 
           "type": "string", 
-          "enum": ["pending", "processing", "validated", "rejected"],
+          "enum": ["pending", "processing", "validated", "rejected", "flagged"],
           "description": "Current processing status"
         },
         "uploadDate": { "type": "string", "format": "date-time", "description": "ISO timestamp of upload" },
@@ -57,6 +57,21 @@
         "details": { "type": "string" }
       },
       "required": ["id", "documentId", "userId", "userName", "action", "timestamp", "details"]
+    },
+    "DocumentBlueprint": {
+      "title": "Document Blueprint",
+      "description": "A schema and validation rules for a document type.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "documentType": { "type": "string" },
+        "fields": { "type": "array" },
+        "rules": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "documentType", "fields", "rules", "createdAt"]
     }
   },
   "firestore": {
@@ -67,6 +82,10 @@
     "/auditLogs/{logId}": {
       "schema": "AuditLog",
       "description": "Global audit trail for all documents"
+    },
+    "/blueprints/{blueprintId}": {
+      "schema": "DocumentBlueprint",
+      "description": "Collection of document blueprints"
     }
   }
 }

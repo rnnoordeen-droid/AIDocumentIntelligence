@@ -22,27 +22,33 @@ Only extract these fields. If a field is not found, return null for it.`
             },
           },
           {
-            text: `Analyze this document and perform the following:
-1. Classify the document type (e.g., Invoice, Bill of Lading, Contract, ID, etc.).
-2. Extract ALL meaningful data fields found in the document.${schemaInstruction}
-3. Provide a brief summary of the document's purpose.
-4. Assign a confidence score (0-1) for the extraction overall.
-5. Assign a confidence score (0-1) for EACH extracted field.
-6. FRAUD DETECTION: Inspect the document for signs of digital tampering (inconsistent fonts, overlapping text blocks, mismatched alignment, or digital artifacts). 
-7. PII IDENTIFICATION: Identify which extracted fields contain sensitive PII (e.g., ID Numbers, Account Details, Tax Identifiers).
-8. VISUAL LOCALIZATION: For each extracted field, provide its approximate bounding box coordinates on the document page. Use normalized coordinates (0-100) where (0,0) is top-left and (100,100) is bottom-right.
-   - "top": distance from top edge
-   - "left": distance from left edge
-   - "width": width of the field area
-   - "height": height of the field area
-   CRITICAL: You MUST provide coordinates for EVERY field in the 'fields' object. If you cannot find a precise location, provide your best estimate based on the document layout.
+            text: `Analyze this document and perform a HIGH-INTEGRITY extraction.
+            
+EXTRACTOR INSTRUCTIONS:
+1. CROSS-CHECK LOGIC: 
+   - First, perform a literal pattern-based extraction (Regex-style) for identifiers, amounts, and dates.
+   - Second, perform a semantic contextual extraction for the same fields.
+   - If the results disagree, flag the field as "disputed" and provide both values in the reasoning.
+2. GROUNDING (HALLUCINATION PREVENTION):
+   - For every field extracted, assign a "grounding_score" (0-1). 
+   - 1.0 means the value is explicitly visible in the text. 
+   - Lower scores mean the value was inferred or generated based on context.
+3. TAMPER DETECTION: Inspect fonts, alignments, and metadata markers for signs of digital alteration.
+4. CONFIDENCE SCORE: Assign a confidence score (0-1) for EACH extracted field. Fields with confidence < 0.85 will be highlighted for manual review.
 
-Return the data in the following JSON structure:
+Return the data in this JSON structure:
 {
   "documentType": "string",
-  "confidenceScore": number,
-  "fieldConfidence": {
-    "field_name": number,
+  "confidenceScore": number (overall),
+  "groundingScore": number (0-1, overall groundedness),
+  "hallucinationRisk": number (0-1, 1 minus grounding),
+  "fieldMetrics": {
+    "field_name": {
+      "confidence": number,
+      "grounding": number,
+      "isTampered": boolean,
+      "crossCheckResult": "match" | "mismatch" | "inconclusive"
+    },
     ...
   },
   "fieldCoordinates": {
@@ -53,16 +59,16 @@ Return the data in the following JSON structure:
   "fraudAnalysis": {
     "isSuspicious": boolean,
     "reason": "string",
-    "confidence": number
+    "tamperConfidence": number
   },
   "piiFields": ["field_name", ...],
   "fields": {
     "field_name": "value",
     ...
   }
-}
+}${schemaInstruction}
 
-Ensure field names are descriptive (use snake_case or camelCase). If a field contains a list of items (like line items), represent it as an array of objects within the 'fields' object.`,
+Ensure field names are descriptive. If a field contains line items, represent it as an array of objects.`,
           },
         ],
       },
@@ -77,10 +83,12 @@ Ensure field names are descriptive (use snake_case or camelCase). If a field con
     return {
       documentType: result.documentType || "Unknown",
       confidenceScore: result.confidenceScore || 0,
-      fieldConfidence: result.fieldConfidence || {},
+      groundingScore: result.groundingScore || 0,
+      hallucinationRisk: result.hallucinationRisk || 0,
+      fieldMetrics: result.fieldMetrics || {},
       fieldCoordinates: result.fieldCoordinates || {},
       summary: result.summary || "",
-      fraudAnalysis: result.fraudAnalysis || { isSuspicious: false, reason: "", confidence: 1 },
+      fraudAnalysis: result.fraudAnalysis || { isSuspicious: false, reason: "", tamperConfidence: 1 },
       piiFields: result.piiFields || [],
       fields: result.fields || {}
     };

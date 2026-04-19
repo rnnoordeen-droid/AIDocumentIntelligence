@@ -26,13 +26,20 @@ export interface DocumentBlueprint {
 export interface ExtractedData {
   documentType?: string;
   confidenceScore?: number;
-  fieldConfidence?: Record<string, number>;
+  groundingScore?: number;
+  hallucinationRisk?: number;
+  fieldMetrics?: Record<string, {
+    confidence: number;
+    grounding: number;
+    isTampered: boolean;
+    crossCheckResult: 'match' | 'mismatch' | 'inconclusive';
+  }>;
   fields: Record<string, any>;
   summary?: string;
   fraudAnalysis?: {
     isSuspicious: boolean;
     reason: string;
-    confidence: number;
+    tamperConfidence: number;
   };
   piiFields?: string[];
   fieldCoordinates?: Record<string, { top: number; left: number; width: number; height: number }>;
@@ -75,4 +82,27 @@ export interface UserProfile {
   email: string;
   displayName: string;
   role: UserRole;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  sources?: { id: string; fileName: string }[];
+  chartData?: {
+    type: 'bar' | 'line' | 'pie';
+    data: any[];
+    title: string;
+    xAxisKey: string;
+    dataKeys: string[];
+  };
+}
+
+export interface IntelligenceInsight {
+  title: string;
+  value: string | number;
+  change?: number;
+  trend?: 'up' | 'down' | 'neutral';
+  description: string;
 }
