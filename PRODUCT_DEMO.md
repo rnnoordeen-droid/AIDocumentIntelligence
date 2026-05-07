@@ -74,7 +74,7 @@ Ready for enterprise-grade deployment.
 
 ## 📸 How to Complete This Demo
 To finalize this document for sharing:
-1. **Open the App Preview**: Navigate to the live preview window.
+1. **Open the App Preview**: Navigate to the live preview window. (Link https://aistudio.google.com/apps/ad65dfe9-c37a-4882-9065-b88f26a03dca?showAssistant=true&showPreview=true&fullscreenApplet=true access granted only to specific users)
 2. **Capture Key Screens**: Use your OS screenshot tool (Cmd+Shift+4 on Mac, Win+Shift+S on Windows) to capture the sections described above.
 3. **Upload & Replace**: Upload the images to your repository and update the image paths in this file (e.g., `![Dashboard](my_dashboard.png)`).
 4. **Export**: Export this file as a PDF or share the repo for a professional presentation of your work.
