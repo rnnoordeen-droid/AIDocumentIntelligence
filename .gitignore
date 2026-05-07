@@ -8,5 +8,4 @@ coverage/
 !.env.example
 firebase-applet-config.json
 git
-PRODUCT_DEMO.md
 LINKEDIN_ARTICLE.md
