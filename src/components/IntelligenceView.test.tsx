@@ -1,12 +1,15 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { IntelligenceView } from './IntelligenceView';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SCFDocument } from '../types';
+import { act } from 'react-dom/test-utils';
 
 // Mock the intelligence service
 vi.mock('../services/intelligenceService', () => ({
   queryIntelligence: vi.fn(),
-  generateLibraryInsights: vi.fn(() => Promise.resolve([])),
+  generateLibraryInsights: vi.fn(() => Promise.resolve([
+    { title: 'Tax Risk', value: 'Low', description: 'No major risks detected.', trend: 'down' }
+  ])),
 }));
 
 const mockDocs: SCFDocument[] = [
@@ -22,21 +25,25 @@ const mockDocs: SCFDocument[] = [
 ];
 
 describe('IntelligenceView', () => {
-  it('renders fixed chat widget at the top', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders fixed chat widget at the top', async () => {
     render(<IntelligenceView documents={mockDocs} onViewDoc={() => {}} />);
     
     // Check if the title is present
-    expect(screen.getByText('DocBrain Intelligence')).toBeInTheDocument();
+    expect(await screen.findByText('TaxBrain Intelligence')).toBeInTheDocument();
     
     // Check if the chat input is present
-    expect(screen.getByPlaceholderText(/Ask about vendors/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Ask about tax/i)).toBeInTheDocument();
   });
 
-  it('renders insights section below the chat', () => {
+  it('renders insights section below the chat', async () => {
     render(<IntelligenceView documents={mockDocs} onViewDoc={() => {}} />);
     
     // Check if the insights heading is present
-    expect(screen.getByText('Automated Intelligence Insights')).toBeInTheDocument();
+    expect(await screen.findByText('Automated Intelligence Insights')).toBeInTheDocument();
   });
 
   it('contains a scrollable container for messages', () => {

@@ -1,141 +1,171 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: users
-    // Document ID: {userId}
-    // Fields:
-    //   - name: string (required)
-    //   - email: string (required, email format)
-    //   - role: string (required, ['admin', 'validator', 'viewer'])
-    //
-    // Collection: documents
-    // Document ID: {docId}
-    // Fields:
-    //   - id: string (required)
-    //   - fileName: string (required)
-    //   - fileUrl: string (optional)
-    //   - base64Content: string (optional, for preview)
-    //   - fileType: string (required)
-    //   - status: string (required, ['pending', 'processing', 'validated', 'rejected'])
-    //   - uploadDate: string (required, ISO 8601)
-    //   - uploadedBy: string (required, email)
-    //   - validatedBy: string (optional, email)
-    //   - validationDate: string (optional, ISO 8601)
-    //   - extractedData: map (optional)
-    //
-    // Collection: auditLogs
-    // Document ID: {logId}
-    // Fields:
-    //   - id: string (required)
-    //   - documentId: string (required)
-    //   - userId: string (required)
-    //   - userName: string (required)
-    //   - action: string (required, ['UPLOAD', 'VALIDATE', 'REJECT', 'EDIT'])
-    //   - timestamp: string (required, ISO 8601)
-    //   - details: string (required)
-    //
-    // ===============================================================
-
-    // ===============================================================
-    // Helper Functions
-    // ===============================================================
     
-    function isAuthenticated() {
+    // 0. Default Deny Catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ===============================================================
+    // Helper Functions (The Primitives)
+    // ===============================================================
+
+    function isSignedIn() {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
     }
 
     function isAdmin() {
-      return isAuthenticated() &&
-        ((request.auth.token.email == "rn.noordeen@gmail.com" && request.auth.token.email_verified == true) ||
-         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+      return isSignedIn() && (
+        request.auth.token.email == "rn.noordeen@gmail.com" ||
+        (isEmailVerified() && (
+          exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin")
+        ))
+      );
+    }
+
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
 
     function isValidator() {
-      return isAdmin() || 
-        (isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'validator');
+      return isAdmin() || (isEmailVerified() && getUserRole() == "validator");
     }
 
-    function isValidEmail(email) {
-      return email is string &&
-        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
-    }
-
-    function isValidDateString(dateStr) {
-      return dateStr is string &&
-        dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
-    }
-
-    function hasOnlyAllowedFields(fields) {
-      return request.resource.data.keys().hasOnly(fields);
+    function isProfessionalForClient(clientId) {
+      return isEmailVerified() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.assignedClientId == clientId;
     }
 
     // ===============================================================
-    // Rules
+    // Validation Blueprints
+    // ===============================================================
+
+    function isValidSCFDocument(data) {
+      return data.keys().hasAll(['id', 'fileName', 'status', 'uploadDate', 'uploadedBy', 'clientId']) &&
+        data.keys().size() >= 6 &&
+        data.id is string && isValidId(data.id) &&
+        data.fileName is string && data.fileName.size() <= 255 &&
+        data.status in ['pending', 'processing', 'validated', 'rejected', 'flagged'] &&
+        data.uploadDate is string && data.uploadDate.size() <= 50 &&
+        data.uploadedBy == request.auth.token.email &&
+        data.clientId is string && isValidId(data.clientId) &&
+        (!data.keys().contains('extractedData') || data.extractedData is map);
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'email', 'role', 'assignedClientId']) &&
+        data.uid == request.auth.uid &&
+        data.email == request.auth.token.email &&
+        data.role in ['admin', 'validator', 'viewer'] &&
+        data.assignedClientId is string;
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['userId', 'userName', 'action', 'timestamp', 'details']) &&
+        data.userId == request.auth.uid &&
+        data.timestamp is string;
+    }
+
+    // ===============================================================
+    // Resource Rules
     // ===============================================================
 
     match /users/{userId} {
-      // Users can only read their own profile, unless they are admin
-      allow read: if isOwner(userId) || isAdmin();
+      allow get: if isEmailVerified() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
       
-      // Only admins can create or update users (RBAC management)
-      // Exception: Users can create their own initial profile if it's not an admin role
-      allow create: if isAuthenticated() && 
-        (
-          (isOwner(userId) && request.resource.data.role == 'viewer') || 
-          isAdmin()
-        );
+      allow create: if isEmailVerified() && isValidUserProfile(incoming()) && (
+        // Self-registered users default to viewer unless admin sets it
+        (incoming().role == 'viewer') || isAdmin()
+      );
       
-      allow update: if isAdmin();
+      allow update: if isEmailVerified() && (
+        (request.auth.uid == userId && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoUrl'])) ||
+        isAdmin()
+      );
+      
       allow delete: if isAdmin();
     }
 
     match /documents/{docId} {
-      // All authenticated users can read documents in this corporate app
-      allow read: if isAuthenticated();
-      
-      // Any authenticated user can upload a document
-      allow create: if isAuthenticated() && 
-        hasOnlyAllowedFields(['id', 'fileName', 'fileUrl', 'base64Content', 'fileType', 'status', 'uploadDate', 'uploadedBy', 'extractedData']) &&
-        request.resource.data.status in ['pending', 'flagged'] &&
-        isValidDateString(request.resource.data.uploadDate);
-      
-      // Only validators or admins can update document status or extracted data
-      allow update: if isValidator() &&
-        request.resource.data.uploadDate == resource.data.uploadDate && // Immutable metadata
-        request.resource.data.uploadedBy == resource.data.uploadedBy &&
-        request.resource.data.status in ['pending', 'processing', 'validated', 'rejected', 'flagged'];
-      
+      // Secure List Queries
+      allow list: if isEmailVerified() && isAdmin();
+      allow list: if isEmailVerified() && (
+        resource.data.uploadedBy == request.auth.token.email ||
+        isProfessionalForClient(resource.data.get('clientId', ''))
+      );
+
+      allow get: if isEmailVerified() && isValidId(docId) && (
+        isAdmin() || 
+        resource.data.uploadedBy == request.auth.token.email ||
+        isProfessionalForClient(resource.data.get('clientId', ''))
+      );
+
+      allow create: if isEmailVerified() && isValidId(docId) && 
+        isValidSCFDocument(incoming()) && 
+        exists(/databases/$(database)/documents/clients/$(incoming().clientId));
+
+      allow update: if isEmailVerified() && isValidId(docId) && (
+        // Terminal state lock: No edits if already validated/rejected
+        !(existing().status in ['validated', 'rejected']) || isAdmin()
+      ) && (
+        // Action: Internal Status Update (Validator only)
+        (isValidator() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'validatedBy', 'validationDate', 'extractedData'])) ||
+        // Action: User correction (Owner only, if pending/flagged)
+        (resource.data.uploadedBy == request.auth.token.email && 
+         existing().status in ['pending', 'flagged'] && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['extractedData', 'fileName'])) ||
+        isAdmin()
+      ) && (
+        // Immutable field verification using get() to avoid crashes on missing keys in existing legacy data
+        incoming().get('uploadDate', '') == existing().get('uploadDate', '') &&
+        incoming().get('uploadedBy', '') == existing().get('uploadedBy', '') &&
+        incoming().get('id', '') == existing().get('id', '') &&
+        incoming().get('clientId', '') == existing().get('clientId', '')
+      );
+
       allow delete: if isAdmin();
     }
 
-    match /auditLogs/{logId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() &&
-        request.resource.data.userId == request.auth.uid &&
-        isValidDateString(request.resource.data.timestamp);
+    match /clients/{clientId} {
+      allow read: if isEmailVerified(); // Simple read for client list in dropdowns
+      allow create: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    match /audit_logs/{logId} {
+      allow read: if isValidator();
+      allow create: if isEmailVerified() && isValidAuditLog(incoming());
+      allow delete: if isAdmin();
     }
 
     match /blueprints/{blueprintId} {
-      // All authenticated users can read blueprints
-      allow read: if isAuthenticated();
-      
-      // Only admins can manage blueprints
-      allow create, update, delete: if isAdmin();
+      allow read: if isEmailVerified();
+      allow write: if isAdmin();
     }
 
-    // Default deny
-    match /{path=**} {
-      allow read, write: if false;
+    match /system_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
     }
   }
 }

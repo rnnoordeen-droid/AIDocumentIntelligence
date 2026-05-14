@@ -190,7 +190,7 @@ export function IntelligenceView({ documents, onViewDoc }: IntelligenceViewProps
               </div>
               <CardTitle>Library is Empty</CardTitle>
               <CardDescription>
-                You need to upload at least one document before DocBrain can analyze your library and answer questions.
+                You need to upload at least one document before TaxBrain can analyze your library and answer questions.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -208,14 +208,14 @@ export function IntelligenceView({ documents, onViewDoc }: IntelligenceViewProps
           <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-2">
               <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-brand-primary rounded-2xl flex items-center justify-center text-white shadow-lg">
+                <div className="w-14 h-14 bg-indigo-900 rounded-2xl flex items-center justify-center text-white shadow-lg">
                   <Bot size={28} />
                 </div>
                 <div>
-                  <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">DocBrain Intelligence</h1>
+                  <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">TaxBrain Intelligence</h1>
                   <p className="text-sm text-brand-muted flex items-center gap-2">
                     <Sparkles size={14} className="text-brand-accent" />
-                    Advanced long-context reasoning across {documents.length} documents
+                    Advanced regulatory reasoning across {documents.length} client files
                   </p>
                 </div>
               </div>
@@ -249,15 +249,15 @@ export function IntelligenceView({ documents, onViewDoc }: IntelligenceViewProps
                         <div className="absolute inset-0 bg-brand-accent/20 blur-3xl rounded-full" />
                         <Sparkles size={80} className="relative text-brand-accent animate-pulse" />
                       </div>
-                      <h4 className="text-2xl font-bold text-gray-800 mb-2">How can I assist your Supply Chain?</h4>
+                      <h4 className="text-2xl font-bold text-gray-800 mb-2">How can I assist your Tax Advisory?</h4>
                       <p className="max-w-md text-gray-500 mb-10">
-                        I've parsed your library. You can ask for summaries, vendor comparisons, or detect anomalies across all documents.
+                        I've parsed your client library. You can ask for tax position summaries, deduction opportunities, or multi-year compliance reviews.
                       </p>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full max-w-2xl px-4">
                         {[
-                          { text: "Summarize spend trends", icon: <TrendingUp size={16} /> },
-                          { text: "Find missing info", icon: <BarChart3 size={16} /> },
-                          { text: "Vendor comparison", icon: <FileText size={16} /> }
+                          { text: "Analyze deduction trends", icon: <TrendingUp size={16} /> },
+                          { text: "Find compliance risks", icon: <ShieldCheck size={16} /> },
+                          { text: "Multi-year tax comparison", icon: <BarChart3 size={16} /> }
                         ].map(q => (
                           <Button 
                             key={q.text} 
@@ -347,7 +347,7 @@ export function IntelligenceView({ documents, onViewDoc }: IntelligenceViewProps
                       <div className="bg-gray-50 border border-gray-100 p-5 rounded-2xl flex flex-col gap-3 min-w-[200px]">
                         <div className="flex items-center gap-3">
                           <Loader2 size={18} className="animate-spin text-brand-accent" />
-                          <span className="text-sm font-medium text-gray-500">DocBrain is reasoning...</span>
+                          <span className="text-sm font-medium text-gray-500">TaxBrain is reasoning...</span>
                         </div>
                         <div className="space-y-1.5 mt-1">
                           <div className="h-2 w-full bg-gray-200 rounded-full animate-pulse" />
@@ -370,12 +370,13 @@ export function IntelligenceView({ documents, onViewDoc }: IntelligenceViewProps
                   <Input 
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder="Ask about vendors, spending trends, or audit logs..."
+                    placeholder="Ask about tax positions, deduction trends, or regulatory risks..."
                     className="border-none bg-transparent shadow-none focus-visible:ring-0 text-base h-12 flex-1"
                   />
                   <Button 
                     type="submit" 
                     disabled={!input.trim() || isQuerying}
+                    aria-label="Send message"
                     className="bg-brand-primary hover:bg-black text-white shrink-0 w-12 h-12 p-0 rounded-2xl transition-all active:scale-95 shadow-lg shadow-brand-primary/20"
                   >
                     <Send size={20} />
@@ -503,9 +504,9 @@ export function IntelligenceView({ documents, onViewDoc }: IntelligenceViewProps
                   <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center border border-white/20 mb-6">
                     <RefreshCcw size={24} className="text-brand-accent animate-pulse" />
                   </div>
-                  <h3 className="text-2xl font-bold mb-4 italic leading-tight">"Your supply chain is 12% more efficient than last month."</h3>
+                  <h3 className="text-2xl font-bold mb-4 italic leading-tight">"This client's effective tax rate has decreased by 4% YoY."</h3>
                   <p className="text-sm opacity-60 leading-relaxed max-w-sm">
-                    DocBrain automatically continuously analyzes patterns to find cost-saving opportunities and risk factors.
+                    TaxBrain continuously monitors regulatory changes and client data to find optimization and risk factors.
                   </p>
                 </div>
                 

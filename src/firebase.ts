@@ -1,25 +1,16 @@
 import { initializeApp } from 'firebase/app';
 import { 
-  initializeAuth, 
-  browserLocalPersistence, 
-  browserPopupRedirectResolver, 
+  getAuth, 
   GoogleAuthProvider, 
   signInWithPopup, 
-  onAuthStateChanged, 
-  User 
 } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, collection, addDoc } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
-
-// Initialize Auth with explicit persistence and popup resolver for better iframe support
-export const auth = initializeAuth(app, {
-  persistence: browserLocalPersistence,
-  popupRedirectResolver: browserPopupRedirectResolver,
-});
-
+export const auth = getAuth(app);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
 export const googleProvider = new GoogleAuthProvider();
 
 export enum OperationType {
@@ -36,40 +27,52 @@ export interface FirestoreErrorInfo {
   operationType: OperationType;
   path: string | null;
   authInfo: {
-    userId: string | undefined;
+    userId: string | null | undefined;
     email: string | null | undefined;
     emailVerified: boolean | undefined;
     isAnonymous: boolean | undefined;
     tenantId: string | null | undefined;
     providerInfo: {
       providerId: string;
-      displayName: string | null;
       email: string | null;
-      photoUrl: string | null;
     }[];
   }
 }
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+export async function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errMessage = error instanceof Error ? error.message : String(error);
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errMessage,
     authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
+      userId: auth?.currentUser?.uid,
+      email: auth?.currentUser?.email,
+      emailVerified: auth?.currentUser?.emailVerified,
+      isAnonymous: auth?.currentUser?.isAnonymous,
+      tenantId: auth?.currentUser?.tenantId,
+      providerInfo: auth?.currentUser?.providerData.map(provider => ({
         providerId: provider.providerId,
-        displayName: provider.displayName,
         email: provider.email,
-        photoUrl: provider.photoURL
       })) || []
     },
     operationType,
     path
   };
+  
   console.error('Firestore Error: ', JSON.stringify(errInfo));
+  
+  // Background fire and forget logging to system_logs if possible
+  if (auth?.currentUser && db) {
+    addDoc(collection(db, 'system_logs'), {
+      level: 'error',
+      source: `firestore/${operationType}`,
+      message: `Error at path ${path}: ${errMessage}`,
+      timestamp: new Date().toISOString(),
+      userId: auth.currentUser.uid,
+      userEmail: auth.currentUser.email,
+      stack: error instanceof Error ? error.stack : undefined
+    }).catch(e => console.error("Failed to write to system_logs", e));
+  }
+
   throw new Error(JSON.stringify(errInfo));
 }
 
@@ -93,4 +96,6 @@ export const signInWithGoogle = async () => {
   }
 };
 
-export const logout = () => auth.signOut();
+export const logout = async () => {
+  return auth.signOut();
+};

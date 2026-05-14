@@ -1,99 +1,87 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { ExtractedData } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
 export async function parseDocument(base64Data: string, mimeType: string, schema?: any): Promise<ExtractedData> {
   const schemaInstruction = schema 
-    ? `\nSTRICT SCHEMA ENFORCEMENT: You MUST extract the following fields as defined:
+    ? `\nSTRICT SCHEMA ENFORCEMENT: You MUST extract the following fields exactly:
 ${JSON.stringify(schema, null, 2)}
-Only extract these fields. If a field is not found, return null for it.`
+Return individual field values as strings or numbers. Do not nested them unless they are part of the target schema.`
     : "";
 
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: [
-      {
-        parts: [
-          {
-            inlineData: {
-              data: base64Data,
-              mimeType: mimeType,
-            },
-          },
-          {
-            text: `Analyze this document and perform a HIGH-INTEGRITY extraction.
+  const prompt = `Analyze this tax document and perform a HIGH-ACCURACY extraction.
             
 EXTRACTOR INSTRUCTIONS:
-1. CROSS-CHECK LOGIC: 
-   - First, perform a literal pattern-based extraction (Regex-style) for identifiers, amounts, and dates.
-   - Second, perform a semantic contextual extraction for the same fields.
-   - If the results disagree, flag the field as "disputed" and provide both values in the reasoning.
-2. GROUNDING (HALLUCINATION PREVENTION):
-   - For every field extracted, assign a "grounding_score" (0-1). 
-   - 1.0 means the value is explicitly visible in the text. 
-   - Lower scores mean the value was inferred or generated based on context.
-3. TAMPER DETECTION: Inspect fonts, alignments, and metadata markers for signs of digital alteration.
-4. CONFIDENCE SCORE: Assign a confidence score (0-1) for EACH extracted field. Fields with confidence < 0.85 will be highlighted for manual review.
+1. TAX DOMAIN: Identify if this is a Form 1040, 1099, W-2, K-1, or other tax document.
+2. FIELDS: Extract all relevant fields such as Names, IDs, Dates, and all Financial Amounts.
+3. STRUCTURE: Return individual field values as strings or numbers. 
+4. COORDINATES: For each field, estimate its relative position (0-100) on the page.
 
 Return the data in this JSON structure:
 {
-  "documentType": "string",
-  "confidenceScore": number (overall),
-  "groundingScore": number (0-1, overall groundedness),
-  "hallucinationRisk": number (0-1, 1 minus grounding),
-  "fieldMetrics": {
-    "field_name": {
-      "confidence": number,
-      "grounding": number,
-      "isTampered": boolean,
-      "crossCheckResult": "match" | "mismatch" | "inconclusive"
-    },
-    ...
+  "documentType": "string (e.g., Form 1040)",
+  "confidenceScore": number (0-1),
+  "groundingScore": number (0-1),
+  "fields": {
+    "field_name": "value"
   },
-  "fieldCoordinates": {
-    "field_name": { "top": number, "left": number, "width": number, "height": number },
-    ...
-  },
-  "summary": "string",
+  "summary": "2-3 sentence overview of the document",
+  "piiFields": ["list of field names containing sensitive info"],
   "fraudAnalysis": {
     "isSuspicious": boolean,
-    "reason": "string",
-    "tamperConfidence": number
+    "reason": "string (empty if not suspicious)",
+    "tamperConfidence": number (0-1)
   },
-  "piiFields": ["field_name", ...],
-  "fields": {
-    "field_name": "value",
-    ...
+  "fieldCoordinates": {
+    "field_name": { "top": number, "left": number, "width": number, "height": number }
   }
 }${schemaInstruction}
 
-Ensure field names are descriptive. If a field contains line items, represent it as an array of objects.`,
-          },
-        ],
-      },
-    ],
-    config: {
-      responseMimeType: "application/json",
-    },
-  });
+CRITICAL: You MUST return a valid JSON object. If you cannot find any fields, return an empty fields object but still provide a summary and documentType.`;
 
   try {
-    const result = JSON.parse(response.text || "{}");
+    const response = await ai.models.generateContent({
+      model: "gemini-flash-latest",
+      contents: [
+        {
+          parts: [
+            { inlineData: { mimeType, data: base64Data } },
+            { text: prompt }
+          ]
+        }
+      ],
+      config: {
+        responseMimeType: "application/json"
+      }
+    });
+
+    const text = response.text || "{}";
+    // Robust parsing: strip potential markdown blocks
+    const cleanJson = text.replace(/```json\s?|```/g, "").trim();
+    const data = JSON.parse(cleanJson);
+    
+    console.log("AI Extraction Complete for:", data.documentType);
+
     return {
-      documentType: result.documentType || "Unknown",
-      confidenceScore: result.confidenceScore || 0,
-      groundingScore: result.groundingScore || 0,
-      hallucinationRisk: result.hallucinationRisk || 0,
-      fieldMetrics: result.fieldMetrics || {},
-      fieldCoordinates: result.fieldCoordinates || {},
-      summary: result.summary || "",
-      fraudAnalysis: result.fraudAnalysis || { isSuspicious: false, reason: "", tamperConfidence: 1 },
-      piiFields: result.piiFields || [],
-      fields: result.fields || {}
+      documentType: data.documentType || "Unknown",
+      confidenceScore: data.confidenceScore || 0,
+      groundingScore: data.groundingScore || 0.5,
+      hallucinationRisk: data.hallucinationRisk || 0,
+      fields: data.fields || {},
+      fieldMetrics: data.fieldMetrics || {},
+      summary: data.summary || "",
+      piiFields: data.piiFields || [],
+      fraudAnalysis: data.fraudAnalysis || { isSuspicious: false, reason: "", tamperConfidence: 1 },
+      fieldCoordinates: data.fieldCoordinates || {}
     };
   } catch (e) {
-    console.error("Failed to parse AI response", e);
-    return { fields: {} };
+    console.error("AI Extraction Error:", e);
+    return { 
+      documentType: "Unclassified",
+      confidenceScore: 0,
+      fields: {},
+      summary: e instanceof Error ? `Extraction Failed: ${e.message}` : "Extraction failed due to AI response error."
+    };
   }
 }

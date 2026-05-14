@@ -45,18 +45,35 @@
     },
     "AuditLog": {
       "title": "Audit Log",
-      "description": "A record of an action performed on a document.",
+      "description": "A record of an action performed within the platform.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
         "documentId": { "type": "string" },
+        "resourceId": { "type": "string" },
         "userId": { "type": "string" },
         "userName": { "type": "string" },
-        "action": { "type": "string", "enum": ["UPLOAD", "VALIDATE", "REJECT", "EDIT"] },
+        "action": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" },
         "details": { "type": "string" }
       },
-      "required": ["id", "documentId", "userId", "userName", "action", "timestamp", "details"]
+      "required": ["id", "userId", "userName", "action", "timestamp", "details"]
+    },
+    "SystemLog": {
+      "title": "System Log",
+      "description": "Record of application or system errors and events.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "level": { "type": "string", "enum": ["info", "warn", "error"] },
+        "source": { "type": "string" },
+        "message": { "type": "string" },
+        "stack": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" }
+      },
+      "required": ["id", "level", "source", "message", "timestamp"]
     },
     "DocumentBlueprint": {
       "title": "Document Blueprint",
@@ -72,20 +89,90 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "name", "documentType", "fields", "rules", "createdAt"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "A client organization onboarded for document intelligence.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "entityType": { "type": "string", "enum": ["Corporation", "LLC", "Partnership", "Individual"] },
+        "industry": { "type": "string" },
+        "partnerInCharge": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "contactEmail": { "type": "string", "format": "email" },
+        "taxId": { "type": "string" },
+        "onboardingDate": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["Active", "Inactive"] }
+      },
+      "required": ["id", "name", "entityType", "contactEmail", "onboardingDate", "status"]
+    },
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "User profile with role and seniority information.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "validator", "viewer"] },
+        "seniority": { "type": "string" },
+        "tier": { "type": "string" },
+        "status": { "type": "string", "enum": ["Active", "On Leave", "Inactive"] },
+        "assignedClientId": { "type": "string" },
+        "assignedClientName": { "type": "string" }
+      },
+      "required": ["uid", "email", "role", "assignedClientId"]
+    },
+    "StaffInvitation": {
+      "title": "Staff Invitation",
+      "description": "A pending invitation for a new staff member.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "inviteeEmail": { "type": "string", "format": "email" },
+        "inviteeName": { "type": "string" },
+        "role": { "type": "string" },
+        "seniority": { "type": "string" },
+        "tier": { "type": "string" },
+        "invitedBy": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["Sent", "Accepted", "Expired"] },
+        "assignedClientId": { "type": "string" },
+        "assignedClientName": { "type": "string" }
+      },
+      "required": ["id", "inviteeEmail", "inviteeName", "role", "invitedBy", "timestamp", "status", "assignedClientId"]
     }
   },
   "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Collection of user profiles"
+    },
+    "/staff_invitations/{invitationId}": {
+      "schema": "StaffInvitation",
+      "description": "Collection of pending invitations"
+    },
     "/documents/{docId}": {
       "schema": "SCFDocument",
       "description": "Collection of SCF documents"
     },
-    "/auditLogs/{logId}": {
+    "/audit_logs/{logId}": {
       "schema": "AuditLog",
-      "description": "Global audit trail for all documents"
+      "description": "Global audit trail for all platform actions"
+    },
+    "/system_logs/{logId}": {
+      "schema": "SystemLog",
+      "description": "Collection of system and application logs"
     },
     "/blueprints/{blueprintId}": {
       "schema": "DocumentBlueprint",
       "description": "Collection of document blueprints"
+    },
+    "/clients/{clientId}": {
+      "schema": "Client",
+      "description": "Collection of onboarded clients"
     }
   }
 }

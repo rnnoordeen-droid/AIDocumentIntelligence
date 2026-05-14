@@ -31,7 +31,9 @@ graph TD
 - **Styling**: Tailwind CSS for utility-first design.
 - **Animations**: Framer Motion for interactive overlays and transitions.
 - **Backend/Database**: Firebase (Firestore, Authentication).
-- **AI Engine**: Google Gemini 1.5 Flash via `@google/genai`.
+- **AI Engine**: Google Gemini 1.5 Flash 2.0 via `@google/genai`.
+- **Batch Processing**: Parallel-safe sequential ingestion pipeline.
+- **Monitoring**: Integrated System Logs diagnostic suite.
 - **UI Components**: Radix UI primitives & Lucide icons.
 
 ## 🧠 Key Technical Concepts
@@ -41,23 +43,24 @@ Unlike traditional OCR which just returns text, DocManager uses **Document Bluep
 - **Double-Pass Validation**: 
     - *Pass 1*: AI extracts based on the schema.
     - *Pass 2*: The Frontend runs local TypeScript logic (Regex, Range checks) to verify the AI's work.
+- **Multi-File Concurrency**: The system supports batch uploads, processing files sequentially to maintain API stability and state integrity.
 
-### 2. Dynamic Visual Localization
+### 2. Dynamic Visual Localization & Redaction
 We utilize Gemini's spatial reasoning capabilities to extract bounding box coordinates.
 - **Coordinate System**: Normalized 0-100 scale.
-- **Implementation**: The AI returns `top`, `left`, `width`, and `height` for every field. This makes the overlays resolution-independent, scaling perfectly across all device types.
+- **Implementation**: The AI returns `top`, `left`, `width`, and `height` for every field.
+- **Automated PII Redaction**: The platform identifies sensitive fields (SSNs, Tax IDs) via AI and applies a dual-layer masking strategy:
+    1. *Data Layer*: Masked in the UI inputs.
+    2. *Visual Layer*: Black-box overlays are dynamically rendered over the document preview using spatial coordinates.
 
-### 3. Real-Time State Management
-DocManager utilizes **Cloud Firestore** for its reactive programming model.
-- **Reactive Sync**: Using `onSnapshot` listeners, the Dashboard, Audit Logs, and Validation views are synchronized across all connected clients instantly without page refreshes.
+### 3. Immutable Audit Trails & System Logs
+DocManager implements a comprehensive observability stack.
+- **Audit Trails**: Every action is logged to an immutable collection with resource-level tracking.
+- **System Logs**: Critical errors are captured and routed to a dedicated diagnostic view for administrators.
 
-### 4. Security & Compliance
-- **RBAC**: Role-Based Access Control is enforced at the database layer via Firestore Security Rules.
-- **PII Redaction**: A conditional masking layer identifies and hides sensitive data based on AI-identified PII fields.
+## 🚀 Advanced Capabilities: RAG Implementation (TaxBrain)
 
-## 🚀 Advanced Capabilities: RAG Implementation (DocBrain)
-
-DocManager features **DocBrain**, a sophisticated **Retrieval-Augmented Generation (RAG)** engine that allows users to query their entire document library using natural language.
+DocManager features **TaxBrain**, a sophisticated **Retrieval-Augmented Generation (RAG)** engine that allows users to query their entire client document library using natural language.
 
 ### Core Architecture:
 1. **Metadata-Direct Retrieval**: Instead of traditional vector database chunking, we leverage the **Structured Extraction** (JSON data) stored in Firestore. This ensures 100% accuracy in the "retrieval" phase as we filter based on objective metadata (date, vendor, type).
@@ -68,7 +71,7 @@ DocManager features **DocBrain**, a sophisticated **Retrieval-Augmented Generati
     - *Grounded Generation*: Gemini generates answers with mandatory citations (e.g., `[doc-123]`) and optional `chartData` for visual reporting.
 
 ### Reporting Engine:
-- **Visual Intelligence**: If a trend is detected, DocBrain outputs a structured JSON object specifying chart type (Bar, Line, Pie), axis keys, and data points.
+- **Visual Intelligence**: If a tax trend is detected, TaxBrain outputs a structured JSON object specifying chart type (Bar, Line, Pie), axis keys, and data points.
 - **Dynamic Rendering**: The frontend dynamically renders these insights using `Recharts`, allowing for instant conversational analytics.
 
 ### Future Roadmap: Vector Search

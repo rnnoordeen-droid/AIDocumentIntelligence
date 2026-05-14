@@ -1,0 +1,195 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - name: string (required)
+    //   - email: string (required, email format)
+    //   - role: string (required, ['admin', 'validator', 'viewer'])
+    //
+    // Collection: documents
+    // Document ID: {docId}
+    // Fields:
+    //   - id: string (required)
+    //   - fileName: string (required)
+    //   - fileUrl: string (optional)
+    //   - base64Content: string (optional, for preview)
+    //   - fileType: string (required)
+    //   - status: string (required, ['pending', 'processing', 'validated', 'rejected'])
+    //   - uploadDate: string (required, ISO 8601)
+    //   - uploadedBy: string (required, email)
+    //   - validatedBy: string (optional, email)
+    //   - validationDate: string (optional, ISO 8601)
+    //   - extractedData: map (optional)
+    //
+    // Collection: auditLogs
+    // Document ID: {logId}
+    // Fields:
+    //   - id: string (required)
+    //   - documentId: string (required)
+    //   - userId: string (required)
+    //   - userName: string (required)
+    //   - action: string (required, ['UPLOAD', 'VALIDATE', 'REJECT', 'EDIT'])
+    //   - timestamp: string (required, ISO 8601)
+    //   - details: string (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        ((request.auth.token.email == "rn.noordeen@gmail.com" && request.auth.token.email_verified == true) ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+    }
+
+    function isValidator() {
+      return isAdmin() || 
+        (isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'validator');
+    }
+
+    function isProfessionalForClient(clientId) {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.assignedClientId == clientId;
+    }
+
+    function isValidEmail(email) {
+      return email is string &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string &&
+        dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidClient(data) {
+      return data.keys().hasAll(['id', 'name', 'entityType', 'contactEmail', 'onboardingDate', 'status']) &&
+        data.id is string &&
+        data.name is string && data.name.size() > 0 &&
+        data.name.size() <= 200 &&
+        data.entityType in ['Corporation', 'LLC', 'Partnership', 'Individual'] &&
+        isValidEmail(data.contactEmail) &&
+        isValidDateString(data.onboardingDate) &&
+        data.status in ['Active', 'Pending', 'Archived'] &&
+        (!data.keys().contains('taxId') || (data.taxId is string && data.taxId.size() <= 50)) &&
+        (!data.keys().contains('phoneNumber') || (data.phoneNumber is string && data.phoneNumber.size() <= 30)) &&
+        (!data.keys().contains('industry') || (data.industry is string && data.industry.size() <= 100)) &&
+        (!data.keys().contains('partnerInCharge') || (data.partnerInCharge is string && data.partnerInCharge.size() <= 100));
+    }
+
+    function isValidInvitation(data) {
+      return data.keys().hasAll(['id', 'inviteeEmail', 'inviteeName', 'role', 'seniority', 'tier', 'invitedBy', 'timestamp', 'status', 'assignedClientId', 'assignedClientName']) &&
+        data.inviteeEmail is string &&
+        data.status in ['Sent', 'Accepted', 'Expired'] &&
+        data.assignedClientId is string &&
+        exists(/databases/$(database)/documents/clients/$(data.assignedClientId));
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      
+      allow create: if isAuthenticated() && 
+        (
+          (isOwner(userId) && request.resource.data.role == 'viewer') || 
+          (isAdmin() && request.resource.data.assignedClientId is string)
+        );
+      
+      allow update: if isAdmin() || (isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoUrl']));
+      allow delete: if isAdmin();
+    }
+
+    match /staff_invitations/{invitationId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidInvitation(request.resource.data);
+      allow update: if isAdmin();
+    }
+
+    match /clients/{clientId} {
+      // Authenticated members are allowed to view clients
+      allow read: if isAuthenticated();
+      
+      // Any authenticated user can onboard a client
+      // (Usually this might be restricted to certain roles, but the user's logs show permissions issue with 'create')
+      allow create: if isAuthenticated() && isValidClient(request.resource.data);
+      
+      // Only admins can update or delete clients
+      allow update, delete: if isAdmin();
+    }
+
+    match /documents/{docId} {
+      // Professionals can only read documents belonging to their assigned client
+      // Admins can read everything
+      allow read: if isAdmin() || (isAuthenticated() && (
+        !resource.data.keys().contains('clientId') || 
+        isProfessionalForClient(resource.data.clientId)
+      ));
+      
+      // Any authenticated user can upload a document
+      allow create: if isAuthenticated() && 
+        hasOnlyAllowedFields(['id', 'clientId', 'clientName', 'fileName', 'fileUrl', 'base64Content', 'fileType', 'status', 'uploadDate', 'uploadedBy', 'extractedData']) &&
+        request.resource.data.status in ['pending', 'flagged'] &&
+        isValidDateString(request.resource.data.uploadDate);
+      
+      // Only validators or admins can update document status or extracted data
+      allow update: if isValidator() &&
+        request.resource.data.uploadDate == resource.data.uploadDate && // Immutable metadata
+        request.resource.data.uploadedBy == resource.data.uploadedBy &&
+        request.resource.data.status in ['pending', 'processing', 'validated', 'rejected', 'flagged'];
+      
+      allow delete: if isAdmin();
+    }
+
+    match /audit_logs/{logId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid &&
+        isValidDateString(request.resource.data.timestamp);
+    }
+
+    match /system_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated() &&
+        isValidDateString(request.resource.data.timestamp);
+    }
+
+    match /blueprints/{blueprintId} {
+      // All authenticated users can read blueprints
+      allow read: if isAuthenticated();
+      
+      // Only admins can manage blueprints
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

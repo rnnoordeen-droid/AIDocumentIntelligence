@@ -1,10 +1,10 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { SCFDocument, ChatMessage, IntelligenceInsight } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
 /**
- * Ask the "DocBrain" a question across multiple documents.
+ * Ask the "TaxBrain" a question across multiple documents.
  * Implements a Long-Context RAG strategy using Gemini 1.5.
  */
 export async function queryIntelligence(
@@ -12,6 +12,7 @@ export async function queryIntelligence(
   documents: SCFDocument[],
   history: ChatMessage[] = []
 ): Promise<{ text: string; sources: { id: string; fileName: string }[]; chartData?: any }> {
+  
   // 1. Prepare Document Context
   const documentContext = documents.map(doc => {
     return {
@@ -23,74 +24,59 @@ export async function queryIntelligence(
       summary: doc.extractedData?.summary,
       fields: doc.extractedData?.fields
     };
-  }).slice(0, 100); // Limit to 100 docs for stability in this demo
+  }).slice(0, 50); // Reduced for better context window management
 
   // 2. Prepare History Context
   const historyContext = history.map(h => ({
     role: h.role,
     content: h.content
-  })).slice(-5); // Last 5 messages for context
+  })).slice(-5);
 
-  // 3. System Instruction for RAG + Reporting
-  const systemInstruction = `You are "DocBrain", the core intelligence engine for DocManager.
-Your goal is to provide accurate, grounded insights across a library of Supply Chain documents.
+  // 3. System Instruction for RAG + Tax Advisory
+  const prompt = `You are "TaxBrain", leading tax intelligence expert.
+    
+CONTEXT DATA:
+${JSON.stringify(documentContext)}
 
-DOCUMENT CONTEXT:
-${JSON.stringify(documentContext, null, 2)}
+CHAT HISTORY:
+${JSON.stringify(historyContext)}
 
-OPERATING RULES:
-1. GROUNDEDNESS: Only answer based on the provided document context. If you don't know, say so.
-2. CITATIONS: When mentioning specific document data, refer to the document by its ID in square brackets, e.g., [doc-123].
-3. SOURCE IDENTIFICATION: Always return a "sources" array containing the IDs and fileNames of documents you referenced.
-4. REPORT GENERATION: If the user asks for trends, comparisons, or summaries that can be visualized (spending over time, document status distribution, vendor comparison), include a "chartData" object.
-   - chartData.type: "bar", "line", or "pie"
-   - chartData.data: An array of objects for the chart
-   - chartData.title: Descriptive title
-   - chartData.xAxisKey: The key for the X-axis
-   - chartData.dataKeys: An array of keys for the values to plot
-5. TONE: Professional, analytical, and helpful.
+USER QUERY: ${userQuery}
 
-RESPONSE FORMAT:
-You MUST return your response as a JSON object:
+INSTRUCTIONS:
+1. Ground answers ONLY in context.
+2. Use markdown for formatting.
+3. Cite document IDs [doc-id].
+4. Return JSON response.
+5. Tone: Professional and analytical.
+
 {
-  "text": "Your markdown-formatted answer here with citations [id].",
-  "sources": [{"id": "doc-id", "fileName": "file.pdf"}],
-  "chartData": { ... optional ... }
+  "text": "Your answer...",
+  "sources": [{"id": "doc-id", "fileName": "file.name"}],
+  "chartData": { ... }
 }`;
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: `User Query: ${userQuery}\n\nChat History:\n${JSON.stringify(historyContext)}` }]
-        }
-      ],
+      model: "gemini-flash-latest",
+      contents: [{ parts: [{ text: prompt }] }],
       config: {
-        systemInstruction: systemInstruction,
         responseMimeType: "application/json"
       }
     });
 
-    try {
-      const result = JSON.parse(response.text || "{}");
-      return {
-        text: result.text || "I was able to process your request, but I don't have a specific text response for you.",
-        sources: result.sources || [],
-        chartData: result.chartData
-      };
-    } catch (parseError) {
-      console.error("JSON Parse Error in Intelligence:", parseError, response.text);
-      return {
-        text: response.text || "I processed your request but the response format was unexpected.",
-        sources: []
-      };
-    }
+    const text = (response.text || "{}").replace(/```json\s?|```/g, "").trim();
+    const data = JSON.parse(text);
+    
+    return {
+      text: data.text || "I processed your request but no textual response was generated.",
+      sources: data.sources || [],
+      chartData: data.chartData
+    };
   } catch (err) {
     console.error("Intelligence Query Error:", err);
     return { 
-      text: "I encountered an error while processing your library data. Please try again.", 
+      text: "System error during intelligence processing. Please verify document status.", 
       sources: [] 
     };
   }
@@ -107,33 +93,37 @@ export async function generateLibraryInsights(documents: SCFDocument[]): Promise
     date: d.uploadDate
   }));
 
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: `Analyze this document library summary and provide 3 high-level business insights.
+  const prompt = `Analyze this tax document library and provide 3 key business insights.
     
-    Data: ${JSON.stringify(summary)}
+Data: ${JSON.stringify(summary)}
 
-    Return as JSON:
+Return JSON:
+{
+  "insights": [
     {
-      "insights": [
-        {
-          "title": "Insight Title",
-          "value": "Key Metric Value",
-          "change": number (optional % change),
-          "trend": "up" | "down" | "neutral",
-          "description": "Short explanation"
-        }
-      ]
-    }`,
-    config: {
-      responseMimeType: "application/json"
+      "title": "string",
+      "value": "string",
+      "change": number,
+      "trend": "up" | "down" | "neutral",
+      "description": "string"
     }
-  });
+  ]
+}`;
 
   try {
-    const result = JSON.parse(response.text || "{}");
-    return result.insights || [];
+    const response = await ai.models.generateContent({
+      model: "gemini-flash-latest",
+      contents: [{ parts: [{ text: prompt }] }],
+      config: {
+        responseMimeType: "application/json"
+      }
+    });
+
+    const text = (response.text || "{}").replace(/```json\s?|```/g, "").trim();
+    const data = JSON.parse(text);
+    return data.insights || [];
   } catch (e) {
+    console.error("Failed to generate AI insights:", e);
     return [];
   }
 }

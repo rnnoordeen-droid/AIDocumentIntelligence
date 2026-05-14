@@ -1,8 +1,3 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import { useState, useRef, useEffect } from 'react';
 import { 
   LayoutDashboard, 
@@ -12,59 +7,22 @@ import {
   Upload, 
   Search, 
   Bell, 
-  User,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
-  FileSearch,
-  X,
-  Save,
-  Loader2,
-  FileUp,
-  ExternalLink,
-  LogIn,
   LogOut,
-  Download,
-  Database,
-  ShieldAlert,
-  ShieldCheck,
-  Globe,
-  Lock,
-  Unlock,
-  Zap,
-  RefreshCcw,
-  ChevronLeft,
-  HelpCircle,
-  Info,
-  Lightbulb,
-  BookOpen,
-  MessageSquare,
+  Sparkles,
   FileCode,
-  Plus,
-  Trash2,
-  Edit3,
-  Check,
+  Globe,
+  HelpCircle,
   Terminal,
-  Code,
-  Sparkles
+  MessageSquare,
+  Loader2,
+  RefreshCcw
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { IntelligenceView } from './components/IntelligenceView';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from '@/components/ui/table';
+import { Toaster } from '@/components/ui/sonner';
+import { toast } from 'sonner';
 import { 
   Dialog, 
   DialogContent, 
@@ -74,8 +32,6 @@ import {
   DialogFooter
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Toaster } from '@/components/ui/sonner';
-import { toast } from 'sonner';
 import { 
   Select, 
   SelectContent, 
@@ -83,460 +39,175 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
+
+// Hooks
+import { useAuth } from './hooks/useAuth';
+import { useAppData } from './hooks/useAppData';
+
+// Components
+import { DashboardView } from './components/views/DashboardView';
+import { DocumentsView } from './components/views/DocumentsView';
+import { AdministrationView } from './components/views/AdministrationView';
+import { AuditLogsView } from './components/views/AuditLogsView';
+import { SystemLogsView } from './components/views/SystemLogsView';
+import { BlueprintsView } from './components/views/BlueprintsView';
+import { IntelligenceView } from './components/IntelligenceView';
 import { BlueprintModal } from './components/BlueprintModal';
-import { SCFDocument, DocumentStatus, ExtractedData, AuditLog, UserProfile, DocumentBlueprint, ValidationRule } from './types';
+import { ValidationView } from './components/views/ValidationView';
+
+// Services & Firebase
+import { signInWithGoogle, logout, db, handleFirestoreError, OperationType } from './firebase';
 import { parseDocument } from './services/geminiService';
-import { auth, db, signInWithGoogle, logout, handleFirestoreError, OperationType } from './firebase';
-import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { 
-  collection, 
-  onSnapshot, 
-  query, 
-  orderBy, 
-  doc, 
-  setDoc, 
-  updateDoc, 
-  addDoc,
-  serverTimestamp,
-  getDoc,
-  deleteDoc
-} from 'firebase/firestore';
+import { doc, setDoc, addDoc, collection } from 'firebase/firestore';
+import { SCFDocument, DocumentStatus, AuditLog } from './types';
 
 export default function App() {
+  const { user, profile, isAuthReady, loading: authLoading } = useAuth();
+  const { 
+    documents, 
+    auditLogs, 
+    systemLogs,
+    usersList, 
+    clients, 
+    blueprints, 
+    loading: dataLoading, 
+    complianceScore 
+  } = useAppData(user);
+
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [documents, setDocuments] = useState<SCFDocument[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  const [usersList, setUsersList] = useState<UserProfile[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
-  
-  useEffect(() => {
-    (window as any).setIsUploadOpen = setIsUploadOpen;
-  }, []);
+  const [isParsing, setIsParsing] = useState(false);
   const [isValidatingView, setIsValidatingView] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<SCFDocument | null>(null);
-  const [isParsing, setIsParsing] = useState(false);
-  const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [isAuthReady, setIsAuthReady] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRedactionEnabled, setIsRedactionEnabled] = useState(true);
-  const [webhookUrl, setWebhookUrl] = useState('');
-  const [blueprints, setBlueprints] = useState<DocumentBlueprint[]>([]);
-  const [isBlueprintModalOpen, setIsBlueprintModalOpen] = useState(false);
-  const [selectedBlueprint, setSelectedBlueprint] = useState<DocumentBlueprint | null>(null);
-  const [uploadBlueprintId, setUploadBlueprintId] = useState<string>('none');
-  const [complianceScore, setComplianceScore] = useState(0);
-  const [activeField, setActiveField] = useState<string | null>(null);
   
+  // Upload States
+  const [targetClient, setTargetClient] = useState('');
+  const [uploadBlueprintId, setUploadBlueprintId] = useState('none');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Auth Listener & User Profile Sync
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        // Check if user profile exists, if not create it
-        const userRef = doc(db, 'users', currentUser.uid);
-        const userSnap = await getDoc(userRef);
-        
-        if (!userSnap.exists()) {
-          await setDoc(userRef, {
-            uid: currentUser.uid,
-            email: currentUser.email,
-            displayName: currentUser.displayName || 'User',
-            role: 'viewer' // Default role
-          });
-        }
-      }
-      setUser(currentUser);
-      setIsAuthReady(true);
-      if (!currentUser) {
-        setIsLoading(false);
-        setDocuments([]);
-        setAuditLogs([]);
-      }
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // Firestore Listeners
-  useEffect(() => {
-    if (!isAuthReady || !user) return;
-
-    // Documents Listener
-    const docsQuery = query(collection(db, 'documents'), orderBy('uploadDate', 'desc'));
-    const unsubscribeDocs = onSnapshot(docsQuery, (snapshot) => {
-      const docsData = snapshot.docs.map(doc => ({
-        ...doc.data(),
-        id: doc.id,
-      })) as SCFDocument[];
-      setDocuments(docsData);
-      setIsLoading(false);
-      
-      // Calculate Compliance Score
-      if (docsData.length > 0) {
-        const autoPassed = docsData.filter(d => 
-          d.status === 'validated' && 
-          d.extractedData?.confidenceScore && 
-          d.extractedData.confidenceScore > 0.9 &&
-          !d.extractedData.fraudAnalysis?.isSuspicious
-        ).length;
-        setComplianceScore(Math.round((autoPassed / docsData.length) * 100));
-      }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'documents');
-    });
-
-    // Audit Logs Listener
-    const logsQuery = query(collection(db, 'auditLogs'), orderBy('timestamp', 'desc'));
-    const unsubscribeLogs = onSnapshot(logsQuery, (snapshot) => {
-      const logsData = snapshot.docs.map(doc => ({
-        ...doc.data(),
-        id: doc.id,
-      })) as AuditLog[];
-      setAuditLogs(logsData);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'auditLogs');
-    });
-
-    // Users Listener (for Admin)
-    const usersQuery = collection(db, 'users');
-    const unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
-      const usersData = snapshot.docs.map(doc => ({
-        ...doc.data(),
-      })) as UserProfile[];
-      setUsersList(usersData);
-    }, (error) => {
-      // Non-admins might get permission denied here, which is fine
-      console.warn("User list access restricted to admins");
-    });
-
-    // Blueprints Listener
-    const blueprintsQuery = query(collection(db, 'blueprints'), orderBy('createdAt', 'desc'));
-    const unsubscribeBlueprints = onSnapshot(blueprintsQuery, (snapshot) => {
-      const blueprintsData = snapshot.docs.map(doc => ({
-        ...doc.data(),
-        id: doc.id,
-      })) as DocumentBlueprint[];
-      setBlueprints(blueprintsData);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'blueprints');
-    });
-
-    return () => {
-      unsubscribeDocs();
-      unsubscribeLogs();
-      unsubscribeUsers();
-      unsubscribeBlueprints();
-    };
-  }, [isAuthReady, user]);
-
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-
-  // Handle Preview URL generation from base64
-  useEffect(() => {
-    if (selectedDoc?.base64Content) {
-      try {
-        const base64Parts = selectedDoc.base64Content.split(',');
-        if (base64Parts.length < 2) return;
-        
-        const contentType = base64Parts[0].match(/:(.*?);/)?.[1] || '';
-        const base64Data = base64Parts[1];
-        
-        const byteCharacters = atob(base64Data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: contentType });
-        const url = URL.createObjectURL(blob);
-        
-        setPreviewUrl(url);
-        
-        return () => {
-          URL.revokeObjectURL(url);
-        };
-      } catch (e) {
-        console.error("Failed to create preview URL", e);
-        setPreviewUrl(null);
-      }
-    } else {
-      setPreviewUrl(null);
-    }
-  }, [selectedDoc]);
-
-  const downloadCSV = () => {
-    if (documents.length === 0) return;
-    
-    const headers = ["FileName", "Type", "Status", "UploadDate", "UploadedBy", "Summary"];
-    const rows = documents.map(doc => [
-      doc.fileName,
-      doc.extractedData?.documentType || doc.fileType,
-      doc.status,
-      doc.uploadDate,
-      doc.uploadedBy,
-      `"${(doc.extractedData?.summary || "").replace(/"/g, '""')}"`
-    ]);
-    
-    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `docintel_export_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  const isLoading = authLoading || (isAuthReady && user && dataLoading);
 
   const filteredDocs = documents.filter(doc => 
     doc.fileName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    doc.extractedData?.documentType?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    doc.extractedData?.summary?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    Object.values(doc.extractedData?.fields || {}).some(val => 
-      String(val).toLowerCase().includes(searchQuery.toLowerCase())
-    )
+    doc.clientName?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !user) return;
+    const files = event.target.files;
+    if (!files || files.length === 0 || !user) return;
 
-    // Firestore has a 1MB limit per document. Base64 adds ~33% overhead.
-    // We limit to ~750KB to be safe.
-    if (file.size > 750 * 1024) {
-      toast.error("File too large. For this demo, please use files under 750KB due to Firestore document limits.");
-      return;
+    const fileList = Array.from(files);
+    
+    // Validate file sizes first
+    for (const file of fileList) {
+      if (file.size > 2 * 1024 * 1024) { // Increased to 2MB as 750KB is very tight for PDFs
+        toast.error(`${file.name} is too large. Max 2MB allowed.`);
+        return;
+      }
     }
 
     setIsParsing(true);
     setIsUploadOpen(false);
-    toast.info(`Uploading ${file.name}...`);
+    toast.info(`AI Ingesting ${fileList.length} document(s)...`);
 
     try {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = async () => {
-        const fullBase64 = reader.result as string;
-        const base64Data = fullBase64.split(',')[1];
-        
-        const blueprint = uploadBlueprintId !== 'none' ? blueprints.find(b => b.id === uploadBlueprintId) : undefined;
-        const schema = blueprint ? {
-          documentType: blueprint.documentType,
-          fields: blueprint.fields.reduce((acc, f) => ({ ...acc, [f.name]: f.type }), {})
-        } : undefined;
+      let successCount = 0;
+      let failCount = 0;
 
-        const extractedData = await parseDocument(base64Data, file.type, schema);
+      for (const file of fileList) {
+        const reader = new FileReader();
         
-        let status: DocumentStatus = 'pending';
-        
-        // Run validation rules if blueprint exists
-        if (blueprint) {
-          extractedData.validationResults = validateDataAgainstBlueprint(extractedData.fields, blueprint);
-          const hasFailedRules = extractedData.validationResults.some(r => !r.passed);
-          
-          if (hasFailedRules) {
-            status = 'flagged';
-            const failedCount = extractedData.validationResults.filter(r => !r.passed).length;
-            
-            if ((extractedData.confidenceScore || 0) >= 0.95) {
-              toast.warning(`${file.name}: AI is highly confident, but ${failedCount} validation rule(s) failed. Flagged for review.`);
-            } else {
-              toast.warning(`Validation failed for ${file.name}. Document flagged for review.`);
+        const success = await new Promise((resolve) => {
+          reader.readAsDataURL(file);
+          reader.onload = async () => {
+            try {
+              const fullBase64 = reader.result as string;
+              if (!fullBase64 || !fullBase64.includes(',')) {
+                throw new Error("Invalid file data format");
+              }
+              
+              const base64Data = fullBase64.split(',')[1];
+              
+              // Prevent Firestore 1MB document limit issues
+              if (fullBase64.length > 1000000) { 
+                throw new Error("File content too large for direct processing (max ~700KB for base64 storage)");
+              }
+              
+              const blueprint = uploadBlueprintId !== 'none' ? blueprints.find(b => b.id === uploadBlueprintId) : undefined;
+              const selectedClient = clients.find(c => c.id === targetClient);
+
+              const schema = blueprint ? {
+                documentType: blueprint.documentType,
+                fields: blueprint.fields.reduce((acc, f) => ({ ...acc, [f.name]: f.type }), {})
+              } : undefined;
+
+              // AI Extraction
+              const extractedData = await parseDocument(base64Data, file.type, schema);
+              
+              const docId = `doc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+              const newDoc: Omit<SCFDocument, 'auditTrail'> = {
+                id: docId,
+                clientId: targetClient,
+                clientName: selectedClient?.name || 'Unassigned',
+                fileName: file.name,
+                fileUrl: '',
+                base64Content: fullBase64,
+                fileType: extractedData.documentType || (file.type.includes('pdf') ? 'PDF' : 'Image'),
+                status: 'pending',
+                extractedData,
+                uploadDate: new Date().toISOString(),
+                uploadedBy: user.email || 'unknown',
+                piiMasked: false
+              };
+
+              const auditLog: AuditLog = {
+                id: `log-${Date.now()}`,
+                documentId: docId,
+                userId: user.uid,
+                userName: user.displayName || user.email || 'User',
+                action: 'UPLOAD_EXTRACT',
+                timestamp: new Date().toISOString(),
+                details: `Document ${file.name} uploaded for client ${selectedClient?.name || targetClient}. AI classified as ${newDoc.fileType} with ${extractedData.confidenceScore * 100}% confidence.`
+              };
+
+              await setDoc(doc(db, 'documents', docId), newDoc);
+              await addDoc(collection(db, 'audit_logs'), auditLog);
+              
+              successCount++;
+              resolve(true);
+            } catch (err) {
+              console.error(`Failed to process ${file.name}:`, err);
+              failCount++;
+              toast.error(`${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+              resolve(false);
             }
-          }
-        }
-
-        const docId = `doc-${Date.now()}`;
-        const newDoc: Omit<SCFDocument, 'auditTrail'> = {
-          id: docId,
-          fileName: file.name,
-          fileUrl: '', // In a real app, upload to storage first
-          base64Content: fullBase64,
-          fileType: extractedData.documentType || (file.type.includes('pdf') ? 'PDF' : 'Image'),
-          status,
-          extractedData,
-          uploadDate: new Date().toISOString(),
-          uploadedBy: user.email || 'unknown',
-        };
-
-        const auditLog: AuditLog = {
-          id: `log-${Date.now()}`,
-          documentId: docId,
-          userId: user.uid,
-          userName: user.displayName || user.email || 'User',
-          action: 'UPLOAD',
-          timestamp: new Date().toISOString(),
-          details: 'Document uploaded and parsed by AI'
-        };
-
-        try {
-          await setDoc(doc(db, 'documents', docId), newDoc);
-          await addDoc(collection(db, 'auditLogs'), auditLog);
-          
-          setIsParsing(false);
-          toast.success("Document parsed and saved successfully!");
-        } catch (err) {
-          handleFirestoreError(err, OperationType.WRITE, `documents/${docId}`);
-        }
-      };
+          };
+          reader.onerror = () => {
+            failCount++;
+            resolve(false);
+          };
+        });
+      }
+      
+      setIsParsing(false);
+      if (successCount > 0) {
+        toast.success(`Successfully processed ${successCount} document(s)${failCount > 0 ? `, but ${failCount} failed.` : '.'}`);
+      } else if (failCount > 0) {
+        toast.error(`Failed to process all ${failCount} document(s).`);
+      }
     } catch (error) {
       console.error(error);
-      toast.error("Failed to parse document");
+      toast.error("Batch processing encountered a system error.");
       setIsParsing(false);
     }
   };
 
-  const handleDeleteBlueprint = async (id: string) => {
-    try {
-      await deleteDoc(doc(db, 'blueprints', id));
-      toast.success("Blueprint deleted successfully");
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `blueprints/${id}`);
-    }
-  };
-
-  const handleSaveBlueprint = async (blueprintData: Partial<DocumentBlueprint>) => {
-    try {
-      const id = blueprintData.id || `bp-${Date.now()}`;
-      const newBlueprint = {
-        id,
-        name: blueprintData.name || '',
-        description: blueprintData.description || '',
-        documentType: blueprintData.documentType || 'Invoice',
-        fields: blueprintData.fields || [],
-        rules: blueprintData.rules || [],
-        createdAt: blueprintData.createdAt || new Date().toISOString(),
-      };
-      
-      // Remove any undefined fields just in case
-      Object.keys(newBlueprint).forEach(key => {
-        if ((newBlueprint as any)[key] === undefined) {
-          delete (newBlueprint as any)[key];
-        }
-      });
-
-      await setDoc(doc(db, 'blueprints', id), newBlueprint);
-      setIsBlueprintModalOpen(false);
-      toast.success(blueprintData.id ? "Blueprint updated" : "Blueprint created");
-    } catch (err) {
-      console.error("Save blueprint error:", err);
-      handleFirestoreError(err, OperationType.WRITE, 'blueprints');
-    }
-  };
-
-  const validateDataAgainstBlueprint = (data: Record<string, any>, blueprint: DocumentBlueprint) => {
-    const results: { ruleId: string; passed: boolean; message: string }[] = [];
-    
-    blueprint.rules.forEach(rule => {
-      const value = data[rule.field];
-      let passed = true;
-      
-      switch (rule.type) {
-        case 'required':
-          passed = value !== undefined && value !== null && value !== '';
-          break;
-        case 'min_length':
-          passed = String(value || '').length >= (rule.value || 0);
-          break;
-        case 'numeric_range':
-          const num = Number(value);
-          passed = !isNaN(num) && num >= (rule.value?.min || 0) && num <= (rule.value?.max || Infinity);
-          break;
-        case 'regex':
-          passed = new RegExp(rule.value || '').test(String(value || ''));
-          break;
-      }
-      
-      results.push({
-        ruleId: rule.id,
-        passed,
-        message: passed ? 'Passed' : rule.message
-      });
-    });
-    
-    return results;
-  };
-
-  const handleValidate = async (docObj: SCFDocument) => {
-    if (!user) return;
-
-    try {
-      const docRef = doc(db, 'documents', docObj.id);
-      await updateDoc(docRef, {
-        status: 'validated',
-        validatedBy: user.email,
-        validationDate: new Date().toISOString(),
-      });
-
-      const auditLog: AuditLog = {
-        id: `log-${Date.now()}`,
-        documentId: docObj.id,
-        userId: user.uid,
-        userName: user.displayName || user.email || 'User',
-        action: 'VALIDATE',
-        timestamp: new Date().toISOString(),
-        details: 'Human-in-the-loop validation completed'
-      };
-
-      await addDoc(collection(db, 'auditLogs'), auditLog);
-
-      // Trigger Webhook if configured
-      if (webhookUrl) {
-        try {
-          console.log(`Triggering webhook to ${webhookUrl}`, {
-            documentId: docObj.id,
-            status: 'validated',
-            data: docObj.extractedData?.fields
-          });
-          toast.info(`Data synced to Integration Hub: ${webhookUrl}`);
-        } catch (webhookErr) {
-          console.error("Webhook failed", webhookErr);
-        }
-      }
-
-      setIsValidatingView(false);
-      setSelectedDoc(null);
-      toast.success("Document validated and integrated with enterprise system");
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `documents/${docObj.id}`);
-    }
-  };
-
-  const handleReject = async (docObj: SCFDocument) => {
-    if (!user) return;
-
-    try {
-      const docRef = doc(db, 'documents', docObj.id);
-      await updateDoc(docRef, {
-        status: 'rejected',
-      });
-
-      const auditLog: AuditLog = {
-        id: `log-${Date.now()}`,
-        documentId: docObj.id,
-        userId: user.uid,
-        userName: user.displayName || user.email || 'User',
-        action: 'REJECT',
-        timestamp: new Date().toISOString(),
-        details: 'Document rejected during human validation'
-      };
-
-      await addDoc(collection(db, 'auditLogs'), auditLog);
-
-      setIsValidatingView(false);
-      setSelectedDoc(null);
-      toast.error("Document rejected and marked as invalid");
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `documents/${docObj.id}`);
-    }
-  };
-
-  if (!isAuthReady || (isLoading && user)) {
+  if (!isAuthReady || isLoading) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-brand-surface gap-4">
         <Loader2 className="w-12 h-12 animate-spin text-brand-accent" />
-        <p className="text-brand-primary font-medium animate-pulse">Initializing Secure Environment...</p>
+        <p className="text-brand-primary font-medium">Initializing Secure Environment...</p>
       </div>
     );
   }
@@ -544,175 +215,84 @@ export default function App() {
   if (!user) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-brand-surface p-4">
-        <Card className="w-full max-w-md shadow-2xl border-t-4 border-t-brand-accent">
-          <CardHeader className="text-center space-y-4">
-            <div className="w-16 h-16 bg-brand-accent rounded-2xl flex items-center justify-center font-bold text-3xl text-white mx-auto shadow-lg shadow-brand-accent/20">D</div>
-            <div>
-              <CardTitle className="text-2xl font-bold text-brand-primary">DocManager</CardTitle>
-              <CardDescription>Document Intelligence Application</CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="p-4 bg-blue-50 rounded-lg border border-blue-100 flex gap-3">
-              <AlertCircle className="text-blue-600 shrink-0" size={20} />
-              <p className="text-xs text-blue-700 leading-relaxed">
-                This is a secure internal application. Please sign in with your corporate credentials to access the document repository and AI validation engine.
-              </p>
-            </div>
-            <Button 
-              className="w-full bg-brand-accent hover:bg-brand-accent/90 text-white h-12 text-lg font-semibold gap-3"
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 text-center space-y-6">
+           <div className="w-16 h-16 bg-brand-accent rounded-2xl flex items-center justify-center font-bold text-3xl text-white mx-auto shadow-lg shadow-brand-accent/20">D</div>
+           <div>
+              <h1 className="text-2xl font-bold text-brand-primary">DocManager</h1>
+              <p className="text-gray-500">Corporate Document Intelligence</p>
+           </div>
+           <Button 
+              className="w-full bg-brand-accent hover:bg-brand-accent/90 text-white h-12"
               onClick={signInWithGoogle}
             >
-              <LogIn size={20} />
               Sign in with Google
             </Button>
-          </CardContent>
-          <div className="p-6 border-t bg-gray-50 text-center">
             <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Secure Access • Audit Logging Enabled</p>
-          </div>
-        </Card>
+        </div>
       </div>
     );
   }
 
-  const getStatusBadge = (status: DocumentStatus) => {
-    switch (status) {
-      case 'validated':
-        return <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100"><CheckCircle2 className="w-3 h-3 mr-1" /> Validated</Badge>;
-      case 'processing':
-        return <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100"><Clock className="w-3 h-3 mr-1" /> Processing</Badge>;
-      case 'rejected':
-        return <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100"><AlertCircle className="w-3 h-3 mr-1" /> Rejected</Badge>;
-      case 'flagged':
-        return <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100"><ShieldAlert className="w-3 h-3 mr-1" /> Flagged</Badge>;
-      default:
-        return <Badge className="bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-100"><Clock className="w-3 h-3 mr-1" /> Pending</Badge>;
-    }
-  };
-
   return (
     <div className="flex h-screen bg-brand-surface font-sans overflow-hidden">
-      <Toaster position="top-right" />
-      {/* Sidebar */}
+      <Toaster position="top-right" richColors />
+      
+      {/* Sidebar Navigation */}
       <aside className="w-64 bg-brand-primary text-white flex flex-col">
-        <div className="p-6 flex items-center gap-3 border-b border-white/10">
+        <div className="p-6 flex items-center gap-3 border-b border-white/10 shrink-0">
           <div className="w-10 h-10 bg-brand-accent rounded-lg flex items-center justify-center font-bold text-xl">D</div>
           <div>
             <h1 className="font-bold text-sm leading-tight">DocManager</h1>
-            <p className="text-[10px] text-white/50 uppercase tracking-widest">Document Intelligence</p>
+            <p className="text-[10px] text-white/50 uppercase tracking-widest">Enterprise AI</p>
           </div>
         </div>
         
-        <nav className="flex-1 p-4 space-y-2">
-          <NavItem 
-            icon={<LayoutDashboard size={20} />} 
-            label="Dashboard" 
-            active={activeTab === 'dashboard'} 
-            onClick={() => setActiveTab('dashboard')} 
-          />
-          <NavItem 
-            icon={<Sparkles size={20} />} 
-            label="Library Intelligence" 
-            active={activeTab === 'intelligence'} 
-            onClick={() => setActiveTab('intelligence')} 
-          />
-          <NavItem 
-            icon={<FileText size={20} />} 
-            label="Documents" 
-            active={activeTab === 'documents'} 
-            onClick={() => setActiveTab('documents')} 
-          />
-          <NavItem 
-            icon={<History size={20} />} 
-            label="Audit Logs" 
-            active={activeTab === 'audit'} 
-            onClick={() => setActiveTab('audit')} 
-          />
-          <NavItem 
-            icon={<FileCode size={20} />} 
-            label="Blueprints" 
-            active={activeTab === 'blueprints'} 
-            onClick={() => setActiveTab('blueprints')} 
-          />
-          <NavItem 
-            icon={<Globe size={20} />} 
-            label="Integration Hub" 
-            active={activeTab === 'integrations'} 
-            onClick={() => setActiveTab('integrations')} 
-          />
-          <NavItem 
-            icon={<HelpCircle size={20} />} 
-            label="Usage Tutorial" 
-            active={activeTab === 'tutorial'} 
-            onClick={() => setActiveTab('tutorial')} 
-          />
-          <NavItem 
-            icon={<Terminal size={20} />} 
-            label="Technical Guide" 
-            active={activeTab === 'technical'} 
-            onClick={() => setActiveTab('technical')} 
-          />
-          <NavItem 
-            icon={<Settings size={20} />} 
-            label="Settings" 
-            active={activeTab === 'settings'} 
-            onClick={() => setActiveTab('settings')} 
-          />
-          <NavItem 
-            icon={<MessageSquare size={20} />} 
-            label="Submit Issue" 
-            active={false} 
-            onClick={() => toast.info("Feedback form opened. Thank you for helping us improve!")} 
-          />
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+          <NavItem icon={<LayoutDashboard size={18} />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => {setActiveTab('dashboard'); setIsValidatingView(false);}} />
+          <NavItem icon={<Sparkles size={18} />} label="Tax Brain" active={activeTab === 'intelligence'} onClick={() => {setActiveTab('intelligence'); setIsValidatingView(false);}} />
+          <NavItem icon={<FileText size={18} />} label="Documents" active={activeTab === 'documents'} onClick={() => {setActiveTab('documents'); setIsValidatingView(false);}} />
+          <NavItem icon={<Settings size={18} />} label="Administration" active={activeTab === 'admin'} onClick={() => {setActiveTab('admin'); setIsValidatingView(false);}} />
+          <NavItem icon={<History size={18} />} label="Audit Logs" active={activeTab === 'audit'} onClick={() => {setActiveTab('audit'); setIsValidatingView(false);}} />
+          {profile?.role === 'admin' && (
+            <NavItem icon={<Terminal size={18} />} label="System Logs" active={activeTab === 'syslogs'} onClick={() => {setActiveTab('syslogs'); setIsValidatingView(false);}} />
+          )}
+          <div className="my-4 border-t border-white/10 pt-4 opacity-50 px-4 text-[10px] uppercase font-bold tracking-widest text-white/40">Tools</div>
+          <NavItem icon={<FileCode size={18} />} label="Blueprints" active={activeTab === 'blueprints'} onClick={() => {setActiveTab('blueprints'); setIsValidatingView(false);}} />
+          <NavItem icon={<Globe size={18} />} label="Integrations" active={activeTab === 'integrations'} onClick={() => {setActiveTab('integrations'); setIsValidatingView(false);}} />
+          <NavItem icon={<HelpCircle size={18} />} label="Training" active={activeTab === 'tutorial'} onClick={() => {setActiveTab('tutorial'); setIsValidatingView(false);}} />
         </nav>
         
         <div className="p-4 border-t border-white/10">
-          <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer">
-            <div className="w-8 h-8 bg-brand-accent rounded-full flex items-center justify-center text-white font-bold text-xs">
-              {user.displayName?.split(' ').map(n => n[0]).join('') || user.email?.[0].toUpperCase()}
+          <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5">
+            <div className="w-8 h-8 bg-brand-accent rounded-full flex items-center justify-center text-white font-bold text-xs uppercase">
+              {profile?.displayName?.charAt(0) || user.email?.charAt(0)}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium truncate">{user.email}</p>
-              <p className="text-[10px] text-white/50">Authorized User</p>
+              <p className="text-[10px] text-white/50 capitalize">{profile?.role || 'User'}</p>
             </div>
-            <Button variant="ghost" size="icon" className="text-white/50 hover:text-white" onClick={logout}>
+            <Button variant="ghost" size="icon" className="text-white/50 hover:text-white h-8 w-8" onClick={logout}>
               <LogOut size={14} />
             </Button>
           </div>
         </div>
       </aside>
 
-      {/* Main Content */}
+      {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <header className="h-16 bg-white border-b flex items-center justify-between px-8">
-      <div className="relative w-full max-w-2xl flex items-center gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-          <Input 
-            placeholder="Search documents, vendors, or invoice numbers..." 
-            className="pl-10 bg-gray-50 border-none focus-visible:ring-brand-accent w-full h-10"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <button 
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-brand-accent transition-colors"
-            >
-              <RefreshCcw size={14} />
-            </button>
-          )}
-        </div>
-        {searchQuery && (
-          <Badge variant="outline" className="bg-brand-accent/5 text-brand-accent border-brand-accent/20 shrink-0">
-            {filteredDocs.length} {filteredDocs.length === 1 ? 'result' : 'results'}
-          </Badge>
-        )}
-      </div>
+        <header className="h-16 bg-white border-b flex items-center justify-between px-8 shrink-0">
+          <div className="relative w-full max-w-xl">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            <Input 
+              placeholder="Search across all client documents..." 
+              className="pl-10 bg-gray-50 border-none focus-visible:ring-brand-accent w-full"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
           
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" className="relative">
+            <Button variant="ghost" size="icon" className="relative h-10 w-10">
               <Bell size={20} />
               <span className="absolute top-2 right-2 w-2 h-2 bg-brand-accent rounded-full border-2 border-white"></span>
             </Button>
@@ -722,1308 +302,126 @@ export default function App() {
               disabled={isParsing}
             >
               {isParsing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload size={18} />}
-              {isParsing ? 'Processing...' : 'Upload Document'}
+              {isParsing ? 'Extracting...' : 'Upload Doc'}
             </Button>
           </div>
         </header>
 
-        {/* Content Area */}
-        <div className="flex-1 flex flex-col overflow-hidden relative">
-          {activeTab === 'intelligence' && !isValidatingView ? (
-            <div className="absolute inset-0 bg-brand-surface">
-              <IntelligenceView 
-                documents={documents} 
-                onViewDoc={(doc) => {
-                  setSelectedDoc(doc);
-                  setIsValidatingView(true);
-                }}
-              />
-            </div>
+        <section className="flex-1 overflow-hidden relative">
+          {isValidatingView && selectedDoc ? (
+            <ValidationView 
+              document={selectedDoc} 
+              onClose={() => {setIsValidatingView(false); setSelectedDoc(null);}}
+            />
           ) : (
-            <ScrollArea className={`flex-1 ${isValidatingView ? 'p-0' : 'p-8'}`}>
-              <AnimatePresence mode="wait">
-                {activeTab === 'dashboard' && !isValidatingView && (
-                  <motion.div
-                    key="dashboard"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    className="space-y-8 p-8"
-                  >
-                    <div className="flex justify-between items-end">
-                      <div>
-                        <h2 className="text-2xl font-bold text-brand-primary">Welcome back, {user.displayName?.split(' ')[0] || 'User'}</h2>
-                        <p className="text-gray-500">Here's what's happening with your documents today.</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-medium text-gray-400 uppercase tracking-wider">System Status</p>
-                        <div className="flex items-center gap-2 text-green-600 font-medium">
-                          <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse"></div>
-                          AI Engine Online
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Stats Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                      <StatCard title="Total Documents" value={documents.length.toString()} icon={<FileText className="text-blue-600" />} change="+12% from last month" />
-                      <StatCard title="Pending Validation" value={documents.filter(d => d.status === 'pending').length.toString()} icon={<Clock className="text-amber-600" />} change="Requires attention" />
-                      <StatCard title="Compliance Score" value={`${complianceScore}%`} icon={<ShieldCheck className="text-green-600" />} change="Auto-pass rate" />
-                      <StatCard title="AI Accuracy" value="98.4%" icon={<Zap className="text-indigo-600" />} change="Based on last 500 docs" />
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                      <Card className="lg:col-span-2">
-                        <CardHeader>
-                          <CardTitle>Recent Documents</CardTitle>
-                          <CardDescription>Latest uploads matching your current view.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Document</TableHead>
-                                <TableHead>Type</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Date</TableHead>
-                                <TableHead className="text-right">Action</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {filteredDocs.length === 0 ? (
-                                <TableRow>
-                                  <TableCell colSpan={5} className="text-center py-12 text-gray-400">
-                                    <div className="flex flex-col items-center gap-2">
-                                      <FileText size={32} className="opacity-20" />
-                                      <p>No documents found matching "{searchQuery}"</p>
-                                      <Button variant="link" onClick={() => setSearchQuery('')} className="text-brand-accent">Clear search</Button>
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              ) : (
-                                filteredDocs.slice(0, 5).map((doc) => (
-                                  <TableRow key={doc.id}>
-                                    <TableCell className="font-medium">{doc.fileName}</TableCell>
-                                    <TableCell>{doc.extractedData?.documentType || doc.fileType}</TableCell>
-                                    <TableCell>{getStatusBadge(doc.status)}</TableCell>
-                                    <TableCell>{new Date(doc.uploadDate).toLocaleDateString()}</TableCell>
-                                    <TableCell className="text-right">
-                                      <Button variant="ghost" size="sm" onClick={() => { setSelectedDoc(doc); setIsValidatingView(true); }}>View</Button>
-                                    </TableCell>
-                                  </TableRow>
-                                ))
-                              )}
-                            </TableBody>
-                          </Table>
-                        </CardContent>
-                      </Card>
-
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>Audit Activity</CardTitle>
-                          <CardDescription>Recent system and user actions.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-6">
-                            {auditLogs.slice(0, 4).map((log) => (
-                              <div key={log.id} className="flex gap-3">
-                                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                                  <User size={14} className="text-gray-500" />
-                                </div>
-                                <div>
-                                  <p className="text-xs font-medium text-brand-primary">
-                                    <span className="font-bold">{log.userName}</span> {log.details.toLowerCase()}
-                                  </p>
-                                  <p className="text-[10px] text-gray-400 mt-1">{new Date(log.timestamp).toLocaleString()}</p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                          <Button variant="outline" className="w-full mt-6 text-xs" onClick={() => setActiveTab('audit')}>View Full Audit Trail</Button>
-                        </CardContent>
-                      </Card>
-                    </div>
-
-                    {/* Library Intelligence Feature Card */}
-                    <Card className="bg-brand-primary text-white overflow-hidden border-none shadow-xl relative mt-8">
-                      <div className="absolute top-0 right-0 p-8 opacity-10 rotate-12 scale-150">
-                        <Sparkles size={120} />
-                      </div>
-                      <CardContent className="p-8 relative z-10">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                          <div className="max-w-2xl">
-                            <Badge className="bg-brand-accent text-white border-none mb-4 px-3 py-1">New Feature</Badge>
-                            <h3 className="text-3xl font-bold mb-3">Ask your Library Anything</h3>
-                            <p className="text-white/70 text-lg">Our new DocBrain intelligence engine can now reason across all your documents simultaneously. Detect trends, ask complex questions, and generate reports in seconds.</p>
-                          </div>
-                          <Button 
-                            onClick={() => setActiveTab('intelligence')}
-                            className="bg-white text-brand-primary hover:bg-white/90 px-8 h-12 text-lg font-bold shrink-0 shadow-lg"
-                          >
-                            Try DocBrain now
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                )}
-
-            {activeTab === 'documents' && !isValidatingView && (
-              <motion.div
-                key="documents"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-6 p-8"
-              >
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h2 className="text-2xl font-bold text-brand-primary">Document Repository</h2>
-                    <p className="text-gray-500">Manage and validate all documents.</p>
-                  </div>
-                  <Button variant="outline" className="gap-2" onClick={downloadCSV}>
-                    <Download size={18} />
-                    Export CSV
-                  </Button>
+            <ScrollArea className="h-full">
+              {activeTab === 'dashboard' && (
+                <DashboardView 
+                  user={user}
+                  documents={documents}
+                  auditLogs={auditLogs}
+                  complianceScore={complianceScore}
+                  onViewDoc={(doc) => {setSelectedDoc(doc); setIsValidatingView(true);}}
+                  onSwitchTab={setActiveTab}
+                  searchQuery={searchQuery}
+                  onClearSearch={() => setSearchQuery('')}
+                />
+              )}
+              {activeTab === 'documents' && (
+                <DocumentsView 
+                  documents={documents}
+                  onViewDoc={(doc) => {setSelectedDoc(doc); setIsValidatingView(true);}}
+                  searchQuery={searchQuery}
+                />
+              )}
+              {activeTab === 'admin' && (
+                <AdministrationView 
+                  users={usersList}
+                  clients={clients}
+                  currentUser={user}
+                  documents={documents}
+                />
+              )}
+              {activeTab === 'audit' && (
+                <AuditLogsView logs={auditLogs} />
+              )}
+              {activeTab === 'syslogs' && profile?.role === 'admin' && (
+                <SystemLogsView logs={systemLogs} />
+              )}
+              {activeTab === 'intelligence' && (
+                <IntelligenceView 
+                  documents={documents} 
+                  onViewDoc={(doc) => {setSelectedDoc(doc); setIsValidatingView(true);}} 
+                />
+              )}
+              {activeTab === 'blueprints' && (
+                <BlueprintsView blueprints={blueprints} />
+              )}
+              {/* Fallback for other tabs */}
+              {!['dashboard', 'documents', 'admin', 'audit', 'intelligence', 'blueprints'].includes(activeTab) && (
+                <div className="p-12 text-center text-gray-500">
+                  <h2 className="text-xl font-bold">Module Under Maintenance</h2>
+                  <p>The {activeTab} module is being refactored for production performance.</p>
                 </div>
+              )}
+            </ScrollArea>
+          )}
+        </section>
+      </main>
 
-                <Card>
-                  <CardContent className="p-0">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Document Name</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Summary</TableHead>
-                          <TableHead>Confidence</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Upload Date</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredDocs.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={7} className="text-center py-20 text-gray-400">
-                              <div className="flex flex-col items-center gap-2">
-                                <Search size={48} className="opacity-10 mb-2" />
-                                <p className="text-lg font-medium">No documents found</p>
-                                <p className="text-sm">We couldn't find any documents matching your search criteria.</p>
-                                <Button variant="outline" onClick={() => setSearchQuery('')} className="mt-4 border-brand-accent text-brand-accent">
-                                  Clear Search Filters
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          filteredDocs.map((doc) => (
-                            <TableRow key={doc.id}>
-                              <TableCell className="font-medium">{doc.fileName}</TableCell>
-                              <TableCell>
-                                <Badge variant="secondary" className="capitalize">
-                                  {doc.extractedData?.documentType || doc.fileType}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="max-w-xs truncate text-gray-500">
-                                {doc.extractedData?.summary || '---'}
-                              </TableCell>
-                              <TableCell>
-                                {doc.extractedData?.confidenceScore ? (
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                      <div 
-                                        className={`h-full rounded-full ${
-                                          doc.extractedData.confidenceScore > 0.8 ? 'bg-green-500' : 
-                                          doc.extractedData.confidenceScore > 0.5 ? 'bg-amber-500' : 'bg-red-500'
-                                        }`}
-                                        style={{ width: `${doc.extractedData.confidenceScore * 100}%` }}
-                                      ></div>
-                                    </div>
-                                    <span className="text-[10px] font-medium">{Math.round(doc.extractedData.confidenceScore * 100)}%</span>
-                                  </div>
-                                ) : '---'}
-                              </TableCell>
-                              <TableCell>{getStatusBadge(doc.status)}</TableCell>
-                              <TableCell>{new Date(doc.uploadDate).toLocaleDateString()}</TableCell>
-                              <TableCell className="text-right">
-                                <div className="flex justify-end gap-2">
-                                  <Button variant="outline" size="sm" onClick={() => { setSelectedDoc(doc); setIsValidatingView(true); }}>View</Button>
-                                  {doc.status === 'pending' && (
-                                    <Button className="bg-brand-accent hover:bg-brand-accent/90 text-white" size="sm" onClick={() => { setSelectedDoc(doc); setIsValidatingView(true); }}>Validate</Button>
-                                  )}
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )}
-
-            {activeTab === 'audit' && !isValidatingView && (
-              <motion.div
-                key="audit"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-6 p-8"
-              >
-                <div>
-                  <h2 className="text-2xl font-bold text-brand-primary">Audit Trails</h2>
-                  <p className="text-gray-500">Full history of data modifications and system events for compliance.</p>
-                </div>
-
-                <Card>
-                  <CardContent className="p-0">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Timestamp</TableHead>
-                          <TableHead>User</TableHead>
-                          <TableHead>Action</TableHead>
-                          <TableHead>Document</TableHead>
-                          <TableHead>Details</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {auditLogs.map((log) => {
-                          const doc = documents.find(d => d.id === log.documentId);
-                          return (
-                            <TableRow key={log.id}>
-                              <TableCell className="text-xs text-gray-500">{new Date(log.timestamp).toLocaleString()}</TableCell>
-                              <TableCell className="font-medium">{log.userName}</TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className="uppercase text-[10px]">{log.action}</Badge>
-                              </TableCell>
-                              <TableCell className="text-sm">{doc?.fileName || 'Deleted Document'}</TableCell>
-                              <TableCell className="text-sm text-gray-600">{log.details}</TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )}
-
-            {isValidatingView && selectedDoc && (
-              <motion.div
-                key="validation-view"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="h-[calc(100vh-4rem)] flex flex-col p-8 space-y-6 overflow-hidden"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      onClick={() => setIsValidatingView(false)}
-                      className="rounded-full"
-                    >
-                      <ChevronLeft size={24} />
-                    </Button>
-                    <div>
-                      <h2 className="text-2xl font-bold text-brand-primary">Document Validation</h2>
-                      <p className="text-gray-500 flex items-center gap-2">
-                        {selectedDoc.fileName} • {getStatusBadge(selectedDoc.status)}
-                        {selectedDoc.extractedData?.fieldCoordinates && Object.keys(selectedDoc.extractedData.fieldCoordinates).length > 0 && (
-                          <Badge variant="outline" className="bg-brand-accent/5 text-brand-accent border-brand-accent/20 gap-1 h-5 px-1.5 text-[9px]">
-                            <Zap size={10} />
-                            AI Localization Active
-                          </Badge>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-3">
-                    {selectedDoc.status === 'pending' ? (
-                      <>
-                        <Button 
-                          variant="ghost" 
-                          className="text-gray-500 gap-2"
-                          onClick={() => toast.info("Feedback form opened. Thank you for helping us improve!")}
-                        >
-                          <MessageSquare size={18} />
-                          Submit Issue
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          className="text-red-600 border-red-200 hover:bg-red-50"
-                          onClick={() => handleReject(selectedDoc)}
-                        >
-                          Reject
-                        </Button>
-                        <Button 
-                          className="bg-brand-accent hover:bg-brand-accent/90 text-white gap-2"
-                          onClick={() => handleValidate(selectedDoc)}
-                        >
-                          <Save size={18} />
-                          Approve & Integrate
-                        </Button>
-                      </>
-                    ) : (
-                      <div className="flex gap-3">
-                        <Button 
-                          variant="ghost" 
-                          className="text-gray-500 gap-2"
-                          onClick={() => toast.info("Feedback form opened. Thank you for helping us improve!")}
-                        >
-                          <MessageSquare size={18} />
-                          Submit Issue
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          className="gap-2 border-brand-accent text-brand-accent hover:bg-brand-accent/5"
-                          onClick={async () => {
-                            if (!selectedDoc || !selectedDoc.base64Content) return;
-                            setIsParsing(true);
-                            try {
-                              const base64Data = selectedDoc.base64Content.split(',')[1];
-                              const blueprint = uploadBlueprintId !== 'none' ? blueprints.find(b => b.id === uploadBlueprintId) : undefined;
-                              const schema = blueprint ? {
-                                documentType: blueprint.documentType,
-                                fields: blueprint.fields.reduce((acc, f) => ({ ...acc, [f.name]: f.type }), {})
-                              } : undefined;
-
-                              const extractedData = await parseDocument(base64Data, selectedDoc.fileType.includes('PDF') ? 'application/pdf' : 'image/jpeg', schema);
-                              
-                              if (blueprint) {
-                                extractedData.validationResults = validateDataAgainstBlueprint(extractedData.fields, blueprint);
-                              }
-
-                              const docRef = doc(db, 'documents', selectedDoc.id);
-                              await updateDoc(docRef, { extractedData });
-                              toast.success("AI Re-analysis complete! Visual overlays generated.");
-                            } catch (err) {
-                              console.error("Re-analysis error:", err);
-                              toast.error("Failed to re-analyze document.");
-                            } finally {
-                              setIsParsing(false);
-                            }
-                          }}
-                        >
-                          <Zap size={18} />
-                          Re-analyze with AI
-                        </Button>
-                        <Button variant="outline" onClick={() => setIsValidatingView(false)}>Close Review</Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex-1 flex gap-8 min-h-0">
-                  {/* Document Preview Panel */}
-                  <div className="flex-1 bg-white rounded-xl border shadow-sm overflow-hidden flex flex-col">
-                    <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
-                      <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Document Preview</span>
-                      <Badge variant="outline" className="text-[10px]">
-                        {selectedDoc.fileType}
-                      </Badge>
-                    </div>
-                    <div className="flex-1 bg-gray-100 flex justify-center relative overflow-auto group">
-                      {previewUrl ? (
-                        <>
-                          {selectedDoc.base64Content?.includes('application/pdf') ? (
-                            <div className="relative w-full h-full">
-                              <iframe 
-                                src={previewUrl} 
-                                className="w-full h-full border-none"
-                                title="Document Preview"
-                              />
-                              {/* Visual Inspection Overlays for PDF */}
-                              <div className="absolute inset-0 pointer-events-none">
-                                {selectedDoc.extractedData?.fieldCoordinates && Object.entries(selectedDoc.extractedData.fieldCoordinates).map(([fieldName, coords]) => (
-                                  <motion.div 
-                                    key={fieldName}
-                                    initial={{ opacity: 0 }}
-                                    animate={{ 
-                                      opacity: activeField === fieldName ? 0.6 : 0.2,
-                                      scale: activeField === fieldName ? 1.02 : 1
-                                    }}
-                                    className={`absolute border-2 rounded transition-all duration-200 ${
-                                      activeField === fieldName 
-                                        ? 'border-brand-accent bg-brand-accent/20 z-10' 
-                                        : 'border-indigo-400 bg-indigo-400/5'
-                                    }`}
-                                    style={{
-                                      top: `${coords.top}%`,
-                                      left: `${coords.left}%`,
-                                      width: `${coords.width}%`,
-                                      height: `${coords.height}%`,
-                                    }}
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="relative h-fit">
-                              <img 
-                                src={previewUrl} 
-                                alt="Document Preview" 
-                                className="max-w-full h-auto object-contain"
-                                referrerPolicy="no-referrer"
-                              />
-                              {/* Landing AI Inspired Visual Inspection Overlays */}
-                              <div className="absolute inset-0 pointer-events-none">
-                                {selectedDoc.extractedData?.fieldCoordinates && Object.entries(selectedDoc.extractedData.fieldCoordinates).map(([fieldName, coords]) => (
-                                  <motion.div 
-                                    key={fieldName}
-                                    initial={{ opacity: 0 }}
-                                    animate={{ 
-                                      opacity: activeField === fieldName ? 0.6 : 0.3,
-                                      scale: activeField === fieldName ? 1.02 : 1
-                                    }}
-                                    className={`absolute border-2 rounded transition-all duration-200 ${
-                                      activeField === fieldName 
-                                        ? 'border-brand-accent bg-brand-accent/20 z-10' 
-                                        : 'border-indigo-400 bg-indigo-400/10'
-                                    }`}
-                                    style={{
-                                      top: `${coords.top}%`,
-                                      left: `${coords.left}%`,
-                                      width: `${coords.width}%`,
-                                      height: `${coords.height}%`,
-                                    }}
-                                    title={`AI Detected: ${fieldName}`}
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <div className="text-center p-12">
-                          <FileText size={64} className="mx-auto text-gray-300 mb-4" />
-                          <p className="text-lg font-medium text-gray-500">{selectedDoc.fileName}</p>
-                          <p className="text-sm text-gray-400 mt-2">
-                            {selectedDoc.base64Content ? "Generating preview..." : "No preview available for this document"}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Extracted Data Panel */}
-                  <div className="w-[500px] bg-white rounded-xl border shadow-sm flex flex-col overflow-hidden">
-                    <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Extracted Data</span>
-                        {selectedDoc.extractedData?.confidenceScore && (
-                          <Badge variant="outline" className="text-[10px]">
-                            {Math.round(selectedDoc.extractedData.confidenceScore * 100)}% Confidence
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Label htmlFor="redact-toggle" className="text-[10px] font-bold uppercase text-gray-400 cursor-pointer">
-                          Redact PII
-                        </Label>
-                        <Button 
-                          id="redact-toggle"
-                          variant="ghost" 
-                          size="icon" 
-                          className={`h-6 w-10 rounded-full transition-colors ${isRedactionEnabled ? 'bg-brand-accent text-white' : 'bg-gray-200 text-gray-400'}`}
-                          onClick={() => setIsRedactionEnabled(!isRedactionEnabled)}
-                        >
-                          {isRedactionEnabled ? <Lock size={12} /> : <Unlock size={12} />}
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-6 space-y-8">
-                      {selectedDoc.extractedData?.validationResults && selectedDoc.extractedData.validationResults.length > 0 && (
-                        <div className="space-y-3">
-                          <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400">Automated Logic Checks</h4>
-                          <div className="space-y-2">
-                            {selectedDoc.extractedData.validationResults.map((res, idx) => (
-                              <div key={idx} className={`p-3 rounded-lg border flex items-center gap-3 ${
-                                res.passed ? 'bg-green-50 border-green-100 text-green-700' : 'bg-amber-50 border-amber-100 text-amber-700'
-                              }`}>
-                                {res.passed ? <Check size={16} /> : <AlertCircle size={16} />}
-                                <div className="flex-1">
-                                  <p className="text-xs font-bold">{res.passed ? 'Rule Passed' : 'Rule Failed'}</p>
-                                  {!res.passed && <p className="text-[10px] opacity-80">{res.message}</p>}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {selectedDoc.extractedData?.groundingScore !== undefined && (
-                        <div className={`p-4 rounded-lg border flex gap-3 ${
-                          (selectedDoc.extractedData?.groundingScore || 0) > 0.9 ? 'bg-green-50 border-green-100 text-green-700' : 'bg-amber-50 border-amber-100 text-amber-700'
-                        }`}>
-                          <ShieldCheck className={selectedDoc.extractedData.groundingScore > 0.9 ? 'text-green-600' : 'text-amber-600'} size={20} />
-                          <div>
-                            <h5 className="text-sm font-bold">Document Grounding Score</h5>
-                            <p className="text-xs mt-1">
-                              {Math.round(selectedDoc.extractedData.groundingScore * 100)}% of content is explicitly verified in source text.
-                              {selectedDoc.extractedData.hallucinationRisk! > 0.1 && " Minor hallucination risk detected."}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-
-                      {selectedDoc.extractedData?.fraudAnalysis?.isSuspicious && (
-                        <div className="p-4 bg-red-50 rounded-lg border border-red-100 flex gap-3">
-                          <ShieldAlert className="text-red-600 shrink-0" size={20} />
-                          <div>
-                            <h5 className="text-sm font-bold text-red-700">Potential Tampering Detected</h5>
-                            <p className="text-xs text-red-600 mt-1">
-                              {selectedDoc.extractedData.fraudAnalysis.reason}
-                            </p>
-                            <div className="mt-2 flex items-center gap-2">
-                              <Badge className="bg-red-200 text-red-800 border-none text-[10px]">
-                                Fraud Confidence: {Math.round(selectedDoc.extractedData.fraudAnalysis.confidence * 100)}%
-                              </Badge>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {selectedDoc.extractedData?.summary && (
-                        <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
-                          <h5 className="text-[10px] font-bold uppercase text-blue-400 mb-1">AI Summary</h5>
-                          <p className="text-sm text-blue-800 leading-relaxed italic">
-                            "{selectedDoc.extractedData.summary}"
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="space-y-4">
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400">General Fields</h4>
-                        <div className="grid gap-4">
-                          {selectedDoc.extractedData?.fields && Object.entries(selectedDoc.extractedData.fields).map(([key, value]) => {
-                            if (Array.isArray(value)) return null;
-                            const metrics = selectedDoc.extractedData?.fieldMetrics?.[key];
-                            const confidence = metrics?.confidence ?? (selectedDoc.extractedData?.fieldConfidence?.[key] || 1);
-                            const grounding = metrics?.grounding ?? 1;
-                            const isLowConfidence = confidence < 0.85;
-                            const isDisputed = metrics?.crossCheckResult === 'mismatch';
-                            
-                            const isPII = selectedDoc.extractedData?.piiFields?.includes(key);
-                            const displayValue = isRedactionEnabled && isPII ? '••••••••••••' : String(value);
-                            const isLongText = displayValue.length > 40 || key.toLowerCase().includes('summary') || key.toLowerCase().includes('address');
-                            
-                            return (
-                              <div key={key} className="space-y-1">
-                                <div className="grid grid-cols-3 items-start gap-4">
-                                  <Label htmlFor={key} className="text-xs font-semibold capitalize text-gray-500 text-right mt-2 truncate flex items-center justify-end gap-1">
-                                    {key.replace(/_/g, ' ')}
-                                    {isPII && <Lock size={10} className="text-amber-500" />}
-                                  </Label>
-                                  <div className="col-span-2 relative group/input">
-                                    {isLongText ? (
-                                      <Textarea 
-                                        id={key} 
-                                        value={displayValue} 
-                                        readOnly={selectedDoc.status !== 'pending' || (isRedactionEnabled && isPII)}
-                                        onMouseEnter={() => setActiveField(key)}
-                                        onMouseLeave={() => setActiveField(null)}
-                                        onFocus={() => setActiveField(key)}
-                                        onBlur={() => setActiveField(null)}
-                                        className={`text-sm focus-visible:ring-brand-accent min-h-[80px] resize-none ${
-                                          isLowConfidence && selectedDoc.status === 'pending' ? 'border-red-300 bg-red-50/30' : ''
-                                        } ${isRedactionEnabled && isPII ? 'bg-gray-50 font-mono text-gray-400' : ''}`}
-                                        onChange={(e) => {
-                                          if (selectedDoc.extractedData && !(isRedactionEnabled && isPII)) {
-                                            selectedDoc.extractedData.fields[key] = e.target.value;
-                                          }
-                                        }}
-                                      />
-                                    ) : (
-                                      <Input 
-                                        id={key} 
-                                        value={displayValue} 
-                                        readOnly={selectedDoc.status !== 'pending' || (isRedactionEnabled && isPII)}
-                                        onMouseEnter={() => setActiveField(key)}
-                                        onMouseLeave={() => setActiveField(null)}
-                                        onFocus={() => setActiveField(key)}
-                                        onBlur={() => setActiveField(null)}
-                                        className={`h-9 text-sm focus-visible:ring-brand-accent ${
-                                          isLowConfidence && selectedDoc.status === 'pending' ? 'border-red-400 bg-red-50/50 ring-2 ring-red-100' : ''
-                                        } ${isDisputed ? 'border-amber-400 bg-amber-50' : ''} ${isRedactionEnabled && isPII ? 'bg-gray-50 font-mono text-gray-400' : ''}`}
-                                        onChange={(e) => {
-                                          if (selectedDoc.extractedData && !(isRedactionEnabled && isPII)) {
-                                            selectedDoc.extractedData.fields[key] = e.target.value;
-                                          }
-                                        }}
-                                      />
-                                    )}
-                                    {selectedDoc.status === 'pending' && (
-                                      <Button 
-                                        variant="ghost" 
-                                        size="icon" 
-                                        className="absolute -right-7 top-2 opacity-0 group-hover/input:opacity-100 transition-opacity h-6 w-6 text-gray-400 hover:text-brand-accent"
-                                        title="Provide Model Feedback"
-                                        onClick={() => toast.info(`Feedback recorded for ${key}. Our Data-Centric AI will use this to improve future extractions.`)}
-                                      >
-                                        <Zap size={12} />
-                                      </Button>
-                                    )}
-                                    {isLowConfidence && selectedDoc.status === 'pending' && (
-                                      <div className={`absolute -right-11 top-2 text-[10px] font-bold text-red-500`}>
-                                        {Math.round(confidence * 100)}%
-                                      </div>
-                                    )}
-                                    {isDisputed && (
-                                      <div className="absolute -left-6 top-2 text-amber-500" title="Cross-check discrepancy detected">
-                                        <ShieldAlert size={14} />
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                                {isLowConfidence && selectedDoc.status === 'pending' && (
-                                  <div className="grid grid-cols-3 gap-4">
-                                    <div />
-                                    <p className="col-span-2 text-[10px] text-red-500 font-medium">Low confidence - please verify</p>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {selectedDoc.extractedData?.fields && Object.entries(selectedDoc.extractedData.fields).map(([key, value]) => {
-                        if (!Array.isArray(value)) return null;
-                        return (
-                          <div key={key} className="space-y-4">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 capitalize">
-                              {key.replace(/_/g, ' ')}
-                            </h4>
-                            <div className="space-y-3">
-                              {value.map((item, idx) => (
-                                <div 
-                                  key={idx} 
-                                  className="p-3 bg-gray-50 rounded-lg border border-gray-100 text-[11px] space-y-1 shadow-sm hover:border-brand-accent transition-colors cursor-default"
-                                  onMouseEnter={() => setActiveField(key)}
-                                  onMouseLeave={() => setActiveField(null)}
-                                >
-                                  {Object.entries(item).map(([iKey, iVal]) => (
-                                    <div key={iKey} className="grid grid-cols-2 gap-2">
-                                      <span className="text-gray-400 capitalize text-right">{iKey.replace(/_/g, ' ')}:</span>
-                                      <span className="font-semibold text-gray-700">{String(iVal)}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              ))}
-                              <Button variant="outline" size="sm" className="w-full border-dashed py-6 text-gray-400 hover:text-brand-accent hover:border-brand-accent">
-                                + Add Item to {key.replace(/_/g, ' ')}
-                              </Button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {activeTab === 'blueprints' && !isValidatingView && (
-              <motion.div
-                key="blueprints"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-8 p-8"
-              >
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h2 className="text-2xl font-bold text-brand-primary">Document Blueprints</h2>
-                    <p className="text-gray-500">Define structured schemas and validation rules for specific document types.</p>
-                  </div>
-                  <Button 
-                    className="bg-brand-accent hover:bg-brand-accent/90 text-white gap-2"
-                    onClick={() => {
-                      setSelectedBlueprint(null);
-                      setIsBlueprintModalOpen(true);
-                    }}
-                  >
-                    <Plus size={18} />
-                    Create Blueprint
-                  </Button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {blueprints.length === 0 ? (
-                    <Card className="col-span-full p-12 text-center border-dashed">
-                      <FileCode size={48} className="mx-auto text-gray-300 mb-4" />
-                      <h3 className="text-lg font-medium text-gray-500">No Blueprints Defined</h3>
-                      <p className="text-sm text-gray-400 mt-2">Create a blueprint to enforce strict data extraction and validation rules.</p>
-                    </Card>
-                  ) : (
-                    blueprints.map(bp => (
-                      <Card key={bp.id} className="group hover:shadow-md transition-shadow">
-                        <CardHeader className="pb-2">
-                          <div className="flex justify-between items-start">
-                            <Badge variant="outline" className="text-[10px] uppercase font-bold text-brand-accent border-brand-accent/20">
-                              {bp.documentType}
-                            </Badge>
-                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-brand-accent" onClick={() => {
-                                setSelectedBlueprint(bp);
-                                setIsBlueprintModalOpen(true);
-                              }}>
-                                <Edit3 size={14} />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-red-500" onClick={() => handleDeleteBlueprint(bp.id)}>
-                                <Trash2 size={14} />
-                              </Button>
-                            </div>
-                          </div>
-                          <CardTitle className="text-lg mt-2">{bp.name}</CardTitle>
-                          <CardDescription className="text-xs line-clamp-2">{bp.description}</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-3">
-                            <div className="flex justify-between text-xs">
-                              <span className="text-gray-400">Fields Defined</span>
-                              <span className="font-bold">{bp.fields.length}</span>
-                            </div>
-                            <div className="flex justify-between text-xs">
-                              <span className="text-gray-400">Validation Rules</span>
-                              <span className="font-bold">{bp.rules.length}</span>
-                            </div>
-                            <div className="pt-3 border-t flex flex-wrap gap-1">
-                              {bp.fields.slice(0, 3).map(f => (
-                                <Badge key={f.name} variant="secondary" className="text-[9px] px-1.5 py-0">
-                                  {f.name}
-                                </Badge>
-                              ))}
-                              {bp.fields.length > 3 && <span className="text-[9px] text-gray-400">+{bp.fields.length - 3} more</span>}
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))
-                  )}
-                </div>
-              </motion.div>
-            )}
-
-            {activeTab === 'integrations' && !isValidatingView && (
-              <motion.div
-                key="integrations"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-8 p-8"
-              >
-                <div>
-                  <h2 className="text-2xl font-bold text-brand-primary">Integration Hub</h2>
-                  <p className="text-gray-500">Connect DocManager to your enterprise ecosystem via Webhooks and REST APIs.</p>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                  <div className="lg:col-span-2 space-y-6">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <Globe size={20} className="text-brand-accent" />
-                          Webhook Configuration
-                        </CardTitle>
-                        <CardDescription>Automatically push validated document data to your enterprise or ERP systems.</CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-6">
-                        <div className="space-y-2">
-                          <Label htmlFor="webhook-url" className="text-xs font-bold uppercase text-gray-400">Webhook Endpoint URL</Label>
-                          <div className="flex gap-2">
-                            <Input 
-                              id="webhook-url" 
-                              placeholder="https://api.yourcompany.com/v1/ingest" 
-                              value={webhookUrl}
-                              onChange={(e) => setWebhookUrl(e.target.value)}
-                              className="bg-gray-50"
-                            />
-                            <Button variant="outline" onClick={() => {
-                              if (webhookUrl) toast.success("Webhook endpoint saved and verified");
-                              else toast.error("Please enter a valid URL");
-                            }}>Save</Button>
-                          </div>
-                          <p className="text-[10px] text-gray-400 italic">
-                            DocManager will send a POST request with the validated JSON payload to this address.
-                          </p>
-                        </div>
-
-                        <div className="space-y-4 pt-4 border-t">
-                          <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400">Active Connections</h4>
-                          <div className="flex items-center justify-between p-4 border rounded-lg bg-blue-50/30 border-blue-100">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-blue-100 rounded flex items-center justify-center">
-                                <ExternalLink className="text-blue-600" size={20} />
-                              </div>
-                              <div>
-                                <p className="font-bold text-sm text-blue-900">Enterprise ERP System (REST)</p>
-                                <p className="text-xs text-blue-600">Connected • Last sync: 5 mins ago</p>
-                              </div>
-                            </div>
-                            <Badge className="bg-blue-200 text-blue-800 border-none">Active</Badge>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <Database size={20} className="text-indigo-600" />
-                          API Documentation
-                        </CardTitle>
-                        <CardDescription>Use our REST API to programmatically upload and manage documents.</CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="p-4 bg-slate-900 rounded-lg font-mono text-xs text-slate-300 overflow-x-auto">
-                          <p className="text-slate-500"># Upload a document</p>
-                          <p>curl -X POST https://api.docmanager.io/v1/upload \</p>
-                          <p>  -H "Authorization: Bearer YOUR_API_KEY" \</p>
-                          <p>  -F "file=@invoice.pdf" \</p>
-                          <p>  -F "type=invoice"</p>
-                        </div>
-                        <Button variant="outline" className="w-full gap-2">
-                          <FileText size={14} />
-                          View Full API Reference
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  <div className="space-y-6">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Integration Health</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-500">Uptime</span>
-                          <span className="text-sm font-bold text-green-600">99.98%</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-500">Avg. Latency</span>
-                          <span className="text-sm font-bold">245ms</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-500">Success Rate</span>
-                          <span className="text-sm font-bold">100%</span>
-                        </div>
-                        <div className="pt-4 border-t">
-                          <Button variant="outline" className="w-full text-xs">View Error Logs</Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {activeTab === 'tutorial' && !isValidatingView && (
-              <motion.div
-                key="tutorial"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-8 p-8"
-              >
-                <div>
-                  <h2 className="text-2xl font-bold text-brand-primary">Usage Tutorial</h2>
-                  <p className="text-gray-500">Learn how to use DocManager in 3 simple steps.</p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                  <Card className="relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                      <Upload size={80} />
-                    </div>
-                    <CardHeader>
-                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 mb-2 font-bold">1</div>
-                      <CardTitle>Upload</CardTitle>
-                      <CardDescription>Click the "Upload Document" button. You can pick any file like an invoice, a contract, or even a photo of a document.</CardDescription>
-                    </CardHeader>
-                  </Card>
-
-                  <Card className="relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                      <Zap size={80} />
-                    </div>
-                    <CardHeader>
-                      <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center text-amber-600 mb-2 font-bold">2</div>
-                      <CardTitle>AI Magic</CardTitle>
-                      <CardDescription>Our AI reads the document for you. It finds names, dates, and amounts automatically. It even checks if the document looks fake!</CardDescription>
-                    </CardHeader>
-                  </Card>
-
-                  <Card className="relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                      <CheckCircle2 size={80} />
-                    </div>
-                    <CardHeader>
-                      <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center text-green-600 mb-2 font-bold">3</div>
-                      <CardTitle>Validate</CardTitle>
-                      <CardDescription>Check the data on the right. If it's correct, hit "Approve". The data is then sent to your other systems automatically.</CardDescription>
-                    </CardHeader>
-                  </Card>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Lightbulb className="text-amber-500" size={20} />
-                        Cool Features Explained
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="flex gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors">
-                        <div className="shrink-0 mt-1"><Lock size={18} className="text-brand-accent" /></div>
-                        <div>
-                          <p className="font-bold text-sm">Redaction (Privacy)</p>
-                          <p className="text-xs text-gray-500">Turn this on to hide sensitive info like ID numbers. Great for keeping data private!</p>
-                        </div>
-                      </div>
-                      <div className="flex gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors">
-                        <div className="shrink-0 mt-1"><ShieldAlert size={18} className="text-red-500" /></div>
-                        <div>
-                          <p className="font-bold text-sm">Fraud Detection</p>
-                          <p className="text-xs text-gray-500">The AI looks for signs of "Photoshop" or tampering. If it sees something fishy, it warns you.</p>
-                        </div>
-                      </div>
-                      <div className="flex gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors">
-                        <div className="shrink-0 mt-1"><Globe size={18} className="text-blue-500" /></div>
-                        <div>
-                          <p className="font-bold text-sm">Integration Hub</p>
-                          <p className="text-xs text-gray-500">Connect to your other apps. Once you approve a doc, we send the data there so you don't have to type it again.</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="bg-brand-primary text-white border-none shadow-xl">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <BookOpen size={20} />
-                        Pro Tips
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <ul className="space-y-3 text-sm text-white/80">
-                        <li className="flex gap-2">
-                          <div className="w-1.5 h-1.5 bg-brand-accent rounded-full mt-1.5 shrink-0" />
-                          Use high-quality photos or PDFs for the best AI accuracy.
-                        </li>
-                        <li className="flex gap-2">
-                          <div className="w-1.5 h-1.5 bg-brand-accent rounded-full mt-1.5 shrink-0" />
-                          Check the "Confidence Score". If it's low, double-check the data!
-                        </li>
-                        <li className="flex gap-2">
-                          <div className="w-1.5 h-1.5 bg-brand-accent rounded-full mt-1.5 shrink-0" />
-                          You can edit any field before approving if the AI made a small mistake.
-                        </li>
-                        <li className="flex gap-2">
-                          <div className="w-1.5 h-1.5 bg-brand-accent rounded-full mt-1.5 shrink-0" />
-                          The "Audit Log" keeps track of everything, so you never lose your history.
-                        </li>
-                      </ul>
-                    </CardContent>
-                  </Card>
-                </div>
-              </motion.div>
-            )}
-            {activeTab === 'technical' && !isValidatingView && (
-              <motion.div
-                key="technical"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-8 p-8"
-              >
-                <div>
-                  <h2 className="text-2xl font-bold text-brand-primary">Technical Architecture</h2>
-                  <p className="text-gray-500">Deep dive into the system design and implementation details.</p>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                  <div className="lg:col-span-2 space-y-6">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <Code size={20} className="text-brand-accent" />
-                          System Architecture Diagram
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-6">
-                        <div className="p-6 bg-gray-900 rounded-xl font-mono text-xs text-brand-accent overflow-auto border border-white/10 shadow-inner">
-                          <pre>{`
-graph TD
-    User[User / Client] -->|Uploads Document| App[React Frontend]
-    App -->|Stores File| Storage[Firebase Storage / Base64]
-    App -->|Requests Extraction| Gemini[Gemini 1.5 Flash]
-    Gemini -->|Returns JSON + Coordinates| App
-    App -->|Validates Data| Blueprint[Blueprint Engine]
-    Blueprint -->|Flags Errors| App
-    App -->|Persists State| Firestore[Cloud Firestore]
-    App -->|HITL Review| User
-    User -->|Approves/Corrects| App
-    App -->|Triggers Webhook| External[External Systems]
-                          `}</pre>
-                        </div>
-                        <div className="space-y-4">
-                          <h4 className="text-sm font-bold text-gray-700">Core Implementation Details</h4>
-                          <ul className="space-y-3 text-sm text-gray-600">
-                            <li className="flex gap-3">
-                              <div className="w-1.5 h-1.5 bg-brand-accent rounded-full mt-1.5 shrink-0" />
-                              <span><strong>Schema-Driven Extraction</strong>: We inject Document Blueprints directly into the Gemini prompt to enforce strict JSON output.</span>
-                            </li>
-                            <li className="flex gap-3">
-                              <div className="w-1.5 h-1.5 bg-brand-accent rounded-full mt-1.5 shrink-0" />
-                              <span><strong>Visual Localization</strong>: The AI returns normalized coordinates (0-100) which are rendered as absolute-positioned Framer Motion overlays.</span>
-                            </li>
-                            <li className="flex gap-3">
-                              <div className="w-1.5 h-1.5 bg-brand-accent rounded-full mt-1.5 shrink-0" />
-                              <span><strong>Real-time State</strong>: Firestore listeners ensure that document status updates are synchronized across all connected clients instantly.</span>
-                            </li>
-                          </ul>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="bg-brand-accent/5 border-brand-accent/20">
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-brand-accent">
-                          <Plus size={20} />
-                          Contribute to DocManager
-                        </CardTitle>
-                        <CardDescription className="text-brand-accent/70">We welcome developers to contribute back to the repository!</CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <p className="text-sm text-gray-700 leading-relaxed">
-                          DocManager is an open-source project designed to showcase the power of Data-Centric AI. We are looking for contributors to help with:
-                        </p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="p-3 bg-white rounded-lg border border-brand-accent/10 shadow-sm">
-                            <p className="font-bold text-xs text-brand-primary mb-1">New Validation Rules</p>
-                            <p className="text-[10px] text-gray-500">Help us build more complex logic checks for enterprise data.</p>
-                          </div>
-                          <div className="p-3 bg-white rounded-lg border border-brand-accent/10 shadow-sm">
-                            <p className="font-bold text-xs text-brand-primary mb-1">UI/UX Improvements</p>
-                            <p className="text-[10px] text-gray-500">Enhance the HITL validation experience with better accessibility.</p>
-                          </div>
-                        </div>
-                        <Button className="w-full bg-brand-accent hover:bg-brand-accent/90 text-white gap-2 mt-2">
-                          <Globe size={16} />
-                          View Contribution Guidelines
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  <div className="space-y-6">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-sm">Tech Stack</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-gray-500">Frontend</span>
-                          <span className="font-mono font-bold">React 19 + TS</span>
-                        </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-gray-500">AI Model</span>
-                          <span className="font-mono font-bold">Gemini 1.5 Flash</span>
-                        </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-gray-500">Database</span>
-                          <span className="font-mono font-bold">Cloud Firestore</span>
-                        </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-gray-500">Auth</span>
-                          <span className="font-mono font-bold">Firebase Auth</span>
-                        </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-gray-500">Styling</span>
-                          <span className="font-mono font-bold">Tailwind CSS</span>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="bg-gray-50 border-dashed">
-                      <CardHeader>
-                        <CardTitle className="text-sm flex items-center gap-2">
-                          <Info size={16} className="text-gray-400" />
-                          Developer Notes
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="text-[11px] text-gray-500 leading-relaxed space-y-2">
-                        <p>The application uses a <strong>Data-Centric AI</strong> approach, where the quality of the extraction is prioritized through human feedback loops.</p>
-                        <p>Security is enforced via <strong>Firestore Security Rules</strong>, ensuring that only authenticated users can access sensitive document data.</p>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {activeTab === 'settings' && !isValidatingView && (
-              <motion.div
-                key="settings"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-8 p-8"
-              >
-                <div>
-                  <h2 className="text-2xl font-bold text-brand-primary">System Settings</h2>
-                  <p className="text-gray-500">Configure application preferences and manage user access control.</p>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                  <div className="lg:col-span-2 space-y-6">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>User Management & RBAC</CardTitle>
-                        <CardDescription>Assign roles to team members to control access to sensitive data.</CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>User</TableHead>
-                              <TableHead>Email</TableHead>
-                              <TableHead>Role</TableHead>
-                              <TableHead className="text-right">Action</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {usersList.map((u) => (
-                              <TableRow key={u.uid}>
-                                <TableCell className="font-medium">{u.displayName}</TableCell>
-                                <TableCell>{u.email}</TableCell>
-                                <TableCell>
-                                  <Badge className={`
-                                    ${u.role === 'admin' ? 'bg-purple-100 text-purple-700 border-purple-200' : ''}
-                                    ${u.role === 'validator' ? 'bg-blue-100 text-blue-700 border-blue-200' : ''}
-                                    ${u.role === 'viewer' ? 'bg-gray-100 text-gray-700 border-gray-200' : ''}
-                                  `}>
-                                    {u.role.charAt(0).toUpperCase() + u.role.slice(1)}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  <Button variant="ghost" size="sm">Edit</Button>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                        <Button className="mt-4 bg-brand-accent hover:bg-brand-accent/90 text-white">Add New User</Button>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  <div className="space-y-6">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Security & Compliance</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                          <Label className="text-xs">Data Retention Policy</Label>
-                          <select className="w-full p-2 text-sm border rounded-md">
-                            <option>7 Years (Standard)</option>
-                            <option>10 Years (Extended)</option>
-                            <option>Indefinite</option>
-                          </select>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <Label className="text-xs">Audit Logging</Label>
-                          <Badge className="bg-green-100 text-green-700">Enabled</Badge>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <Label className="text-xs">2FA for Validators</Label>
-                          <Badge className="bg-brand-accent/10 text-brand-accent">Required</Badge>
-                        </div>
-                        <Button variant="outline" className="w-full mt-4">Download Security Report</Button>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </ScrollArea>
-        )}
-      </div>
-    </main>
-
-      {/* Upload Dialog */}
+      {/* Shared Upload Dialog */}
       <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Upload Document</DialogTitle>
+            <DialogTitle>Ingest Document</DialogTitle>
             <DialogDescription>
-              Upload an invoice or bill of lading for AI-powered parsing.
+              Select client and optional blueprint for AI-schema enforcement.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase text-gray-400">Select Document Blueprint (Optional)</Label>
-              <Select value={uploadBlueprintId} onValueChange={setUploadBlueprintId}>
-                <SelectTrigger className="w-full bg-gray-50 border-none">
-                  <SelectValue placeholder="No Blueprint (Dynamic Extraction)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No Blueprint (Dynamic Extraction)</SelectItem>
-                  {blueprints.map(bp => (
-                    <SelectItem key={bp.id} value={bp.id}>{bp.name} ({bp.documentType})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-[10px] text-gray-400 italic">
-                Using a blueprint ensures strict schema enforcement and automated logic checks.
-              </p>
-            </div>
-
-            <div 
-              className="border-2 border-dashed border-gray-200 rounded-xl p-12 flex flex-col items-center justify-center gap-4 hover:border-brand-accent hover:bg-brand-accent/5 transition-all cursor-pointer group"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center group-hover:bg-brand-accent/10 transition-colors">
-                <FileUp className="text-gray-400 group-hover:text-brand-accent" />
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-medium">Click to upload or drag and drop</p>
-                <p className="text-xs text-gray-400 mt-1">PDF, PNG, or JPG (max 10MB)</p>
-              </div>
-              <input 
-                type="file" 
-                className="hidden" 
-                ref={fileInputRef} 
-                onChange={handleFileUpload}
-                accept=".pdf,.png,.jpg,.jpeg"
-              />
-            </div>
+             <div className="space-y-2">
+                <Label className="text-[10px] font-bold uppercase text-gray-400">Target Client</Label>
+                <Select value={targetClient} onValueChange={setTargetClient}>
+                  <SelectTrigger className="bg-gray-50 border-none">
+                    <SelectValue placeholder="Select Client (Required)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+             </div>
+             <div className="space-y-2">
+                <Label className="text-[10px] font-bold uppercase text-gray-400">Extraction Blueprint</Label>
+                <Select value={uploadBlueprintId} onValueChange={setUploadBlueprintId}>
+                  <SelectTrigger className="bg-gray-50 border-none">
+                    <SelectValue placeholder="Dynamic Extraction" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Dynamic (AI-only)</SelectItem>
+                    {blueprints.map(bp => <SelectItem key={bp.id} value={bp.id}>{bp.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+             </div>
+             <div 
+                className="border-2 border-dashed border-gray-200 rounded-xl p-12 flex flex-col items-center justify-center gap-4 hover:border-brand-accent hover:bg-brand-accent/5 transition-all cursor-pointer"
+                onClick={() => {
+                  if (!targetClient) {
+                    toast.error("Please select a client first");
+                    return;
+                  }
+                  fileInputRef.current?.click();
+                }}
+              >
+                <Upload className="text-gray-400" />
+                <p className="text-sm font-medium">Click to upload doc</p>
+                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} accept=".pdf,.png,.jpg,.jpeg" multiple />
+             </div>
           </div>
-          <DialogFooter className="sm:justify-start">
-            <Button type="button" variant="secondary" onClick={() => setIsUploadOpen(false)}>
-              Cancel
-            </Button>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsUploadOpen(false)}>Cancel</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Validation Dialog (HITL) - REMOVED IN FAVOR OF FULL SCREEN VIEW */}
-      
-      <BlueprintModal 
-        isOpen={isBlueprintModalOpen}
-        onClose={() => setIsBlueprintModalOpen(false)}
-        onSave={handleSaveBlueprint}
-        initialData={selectedBlueprint}
-      />
     </div>
   );
 }
@@ -2032,43 +430,14 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, labe
   return (
     <button 
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all ${
         active 
-          ? 'bg-brand-accent text-white shadow-lg shadow-brand-accent/20' 
+          ? 'bg-brand-accent text-white shadow-md' 
           : 'text-white/60 hover:text-white hover:bg-white/5'
       }`}
     >
       {icon}
       <span className="font-medium text-sm">{label}</span>
-      {active && (
-        <motion.div 
-          layoutId="activeNav" 
-          className="ml-auto w-1.5 h-1.5 bg-white rounded-full"
-        />
-      )}
     </button>
-  );
-}
-
-function StatCard({ title, value, icon, change }: { title: string, value: string, icon: React.ReactNode, change: string }) {
-  return (
-    <Card>
-      <CardContent className="p-6">
-        <div className="flex justify-between items-start">
-          <div className="p-2 bg-gray-50 rounded-lg">
-            {icon}
-          </div>
-          <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
-            change.includes('+') ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-          }`}>
-            {change}
-          </span>
-        </div>
-        <div className="mt-4">
-          <h3 className="text-sm font-medium text-gray-500">{title}</h3>
-          <p className="text-2xl font-bold text-brand-primary mt-1">{value}</p>
-        </div>
-      </CardContent>
-    </Card>
   );
 }

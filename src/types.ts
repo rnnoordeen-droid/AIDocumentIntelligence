@@ -1,9 +1,9 @@
-export type DocumentStatus = 'pending' | 'processing' | 'validated' | 'rejected' | 'flagged';
+export type DocumentStatus = 'pending' | 'reviewing' | 'validated' | 'rejected' | 'flagged';
 
 export interface ValidationRule {
   id: string;
   field: string;
-  type: 'required' | 'min_length' | 'max_length' | 'regex' | 'numeric_range' | 'custom';
+  type: 'required' | 'min_length' | 'max_length' | 'regex' | 'numeric_range' | 'custom' | 'tax_compliance';
   value?: any;
   message: string;
 }
@@ -52,6 +52,8 @@ export interface ExtractedData {
 
 export interface SCFDocument {
   id: string;
+  clientId?: string;
+  clientName?: string;
   fileName: string;
   fileUrl: string;
   base64Content?: string;
@@ -63,16 +65,29 @@ export interface SCFDocument {
   validatedBy?: string;
   validationDate?: string;
   auditTrail?: AuditLog[];
+  piiMasked?: boolean;
 }
 
 export interface AuditLog {
   id: string;
-  documentId: string;
+  documentId?: string;
+  resourceId?: string; // Generic resource ID for broader auditing
   userId: string;
   userName: string;
   action: string;
   timestamp: string;
   details: string;
+}
+
+export interface SystemLog {
+  id: string;
+  level: 'info' | 'warn' | 'error';
+  source: string;
+  message: string;
+  stack?: string;
+  timestamp: string;
+  userId?: string;
+  userEmail?: string;
 }
 
 export type UserRole = 'admin' | 'validator' | 'viewer';
@@ -82,6 +97,24 @@ export interface UserProfile {
   email: string;
   displayName: string;
   role: UserRole;
+  seniority?: string;
+  tier?: string;
+  status?: 'Active' | 'On Leave' | 'Inactive';
+  assignedClientId?: string;
+  assignedClientName?: string;
+}
+
+export interface Client {
+  id: string;
+  name: string;
+  entityType: 'Individual' | 'Corporation' | 'LLC' | 'Partnership';
+  taxId?: string;
+  industry?: string;
+  partnerInCharge?: string;
+  phoneNumber?: string;
+  contactEmail: string;
+  onboardingDate: string;
+  status: 'Active' | 'Pending' | 'Archived';
 }
 
 export interface ChatMessage {
